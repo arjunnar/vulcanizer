@@ -6,16 +6,12 @@ class FileHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         try:
-	    if self.path.endswith(".html"):
-		print "reading html file"
-	    f = open(curdir + sep + self.path)
-	    print self.path
+            fileContents = "hahaha"
+	    # fileContents = FileStore.getFileContents(self.path)
 	    self.send_response(200)
 	    self.send_header('title', "yay")
 	    self.end_headers()
-	    self.wfile.write(f.read())
-	    f.close()
-	    
+	    self.wfile.write(fileContents)	    
 	    return
 
 	except IOError:
@@ -27,11 +23,17 @@ class FileHandler(BaseHTTPRequestHandler):
 	    ctype, pdict = cgi.parse_header(self.headers.getheader("content-type"))
 	    self.send_response(301)
 	    self.end_headers()
-	    upfilecontent = query.get("index.html")
-	    print "filecontent"
+	    contentLength = int(self.headers.getheader('content-length', 0)) 
+	    postBody = self.rfile.read(contentLength)
+	    print "what's going on!?"
+	    print postBody
+	    # I don't knwo what query.get() is doing
+	    upFileContent = query.get("index.html")
+	    print postBody
+	    # FileStore.store(fileName, upFileContents)
 	    self.wfile.write("<HTML>POST OK<BR><BR>");
-	    self.wfile.write(upfilecontent[0]);
-
+	    self.wfile.write();
+            return 
 	except:
 	    pass
 
