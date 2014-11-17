@@ -43,6 +43,7 @@ def send_http_request(host, port, path):
     response = connection.getresponse()
     print "request sent"
     connection.close()
+    print response.status
     return response.read()
 ####
     
@@ -60,9 +61,9 @@ try:
     print("HTTP request:")
     print(req)
 
-    resp = send_req(sys.argv[1], int(sys.argv[2]), fileName)
+    resp = send_req(sys.argv[1], int(sys.argv[2]), "/" + fileName)
     print("HTTP response:")
     print(resp)
 except:
     print("Exception:")
-    print(traceback.format_exc())
+    print(traceback.format_mat_exc())
