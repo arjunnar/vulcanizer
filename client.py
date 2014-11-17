@@ -43,7 +43,7 @@ def send_http_request(host, port, path):
     response = connection.getresponse()
     print "request sent"
     connection.close()
-    print response.status
+    # print response.status
     return response.read()
 ####
     
@@ -57,9 +57,6 @@ try:
     port = sys.argv[2]
     fileName = sys.argv[3]
     send_http_request(host,port,"/" + fileName)
-    req = build_request(fileName)
-    print("HTTP request:")
-    print(req)
 
     resp = send_req(sys.argv[1], int(sys.argv[2]), "/" + fileName)
     print("HTTP response:")

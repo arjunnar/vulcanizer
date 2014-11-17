@@ -32,7 +32,7 @@ class Filestore():
         self.fileMap[newEncryptedFilename] = fileObj
         
 class EncryptedFile():
-    def EncryptedFile(name, contents):
+    def __init__ (self, name, contents):
         self.encryptedName = name
         self.encryptedContents = contents
         
