@@ -1,66 +1,74 @@
-#!/usr/bin/python
-import sys
-import socket
-import traceback
-import urllib
-import struct
-from httplib import *
+## client-side interface
 
-def build_request(fileName):
-    req = "GET /" + \
-          fileName + \
-          " HTTP/1.1\r\n\r\n"
-    return req
+import hashlib
 
-
-def build_post_request(fileName, contents):
-    req = "POST /"
-    return req
-
-
-####
-
-def send_req(host, port, req):
-    connection = HTTPConnection(host, port)
-    connection.connect()
-    connection.set_debuglevel(1)
-    request = connection.request("GET", req)
-    print "get ready for response..."
-    response = connection.getresponse()
-    print "request sent"
-    connection.close()
-    return response.read()
-
-def send_http_request(host, port, path):
-    connection = HTTPConnection(host, port)
-    connection.connect()
-    connection.set_debuglevel(1)
-    params = urllib.urlencode({'fileName': path, 'contents': "This is file content."})
-    headers = {"Content-type": "application/x-www-form-urlencoded",
-               "Accept": "text/plain"}
-    request = connection.request("POST", path, params, headers)
-    print "get ready for response..."
-    response = connection.getresponse()
-    print "request sent"
-    connection.close()
-    # print response.status
-    return response.read()
-####
+class VulcanClient:
+    def __init__(self):
+	# maps unencrypted filenames to hash of file contents
+        self.fileHashesMap = {} # Convert this to a cache later
     
+    def addFile(self, clientFile):
+        self.addFileHash(clientFile)
+        # encrypt fileName
+        # encrypt fileContents
+        # call to server to store file
 
-if len(sys.argv) != 4:
-    print("Usage: " + sys.argv[0] + " host port fileName")
-    exit()
+    def addFileHash(self, clientFile):
+        filename = clientFile.name
+        contentsHash = hashlib.sha1(clientFile.contents)
+        self.fileHashesMap[filename, contentsHash]
 
-try:
-    host = sys.argv[1]
-    port = sys.argv[2]
-    fileName = sys.argv[3]
-    send_http_request(host,port,"/" + fileName)
 
-    resp = send_req(sys.argv[1], int(sys.argv[2]), "/" + fileName)
-    print("HTTP response:")
-    print(resp)
-except:
-    print("Exception:")
-    print(traceback.format_mat_exc())
+    def getFile(self, filename):
+        # encrypt filename
+        # call to server to get file contents
+
+        # unencrypt file contents
+        if !self.validContents(filename, contents):
+            # raise warning - file may be corrupt.
+
+        clientFile = ClientFile(filename, contents)    
+        return clientFile
+
+
+    def validContents(self, filename, contents):
+        contentsHash = hashlib.sha1(contents)
+        previousHash = fileHashesMap[filename]
+        return contentsHash == previousHash
+
+    def deleteFile(self, filename):
+        encryptFilename = encryptedFilename(filename)
+        # call to server to delete for encryptedFileName
+        # return response-type thing
+        del self.fileHashesMap[fileName]
+
+        return 
+
+    def updateFile(self, clientFile):
+        self.addFileHash(clientFile)
+        contents = clientFile.contents
+        filename = clientFile.name
+        encryptFilename = encryptFilename(filename)
+        encryptedFileContents = encryptFileContents(contents)
+
+        # call to server to update
+        # return response-type thing
+
+
+    def renameFile(self, filename, newFilename):
+        encryptFilename = encryptFilename(fileName)
+        newEncryptFilename = encryptFilename(newFilename)
+
+        # call to server to rename
+        # return response-type thing
+
+    def encryptFilename(filename):
+        encryptedFilename = ""
+        return encryptedFilename
+
+    def encryptFileContents(contents):
+        encryptedFileContents = ""
+        return  
+
+    def decryptFileContents(encryptedFileContents):
+        return fileContents

@@ -9,9 +9,9 @@ aNewFile = EncryptedFile("encryptedName", "encryptedCont")
 fileStore.addFile(aNewFile)
 
 class FileHandler(BaseHTTPRequestHandler):
-##    def __init__(self):
-##        super(FileHandler, self).__init__()
-##        self.fileStore = filestore.Filestore()
+    def __init__(self):
+        super(FileHandler, self).__init__(self, request, client_address, server)
+        self.fileSt ore = filestore.Filestore()
 
     def do_GET(self):
         try:
