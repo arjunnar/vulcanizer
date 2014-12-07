@@ -1,21 +1,68 @@
-filestoreDirectory = "filestore/"
+import os
 
-def testWriteToDisk():
-   f = EncryptedFile('testFile.txt', 'testContents')
-   writeFileToDisk(f)
+filestoreDirectory = "filestore/"
 
 def writeFileToDisk(encryptedFile): 
     filename = filestoreDirectory + encryptedFile.encryptedName
     f = open(filename, 'w+')
     f.write(encryptedFile.encryptedContents)
     
+def fileExists(encryptedFilename):
+    return os.path.isfile(filestoreDirectory + encryptedFilename)
 
+# assumes that file exists
+# gets file with only read permission
+# returns an instance of EncryptedFile class
+def getFileFromDisk(encryptedFilename):
+    f = open(filestoreDirectory + encryptedFilename, 'r') 
+    encryptedContents = f.readlines() 
+    return EncryptedFile(encryptedFilename, encryptedContents)
 
+# assumes that the file exists 
+def deleteFileOnDisk(encryptedFilename):
+    os.remove(filestoreDirectory + encryptedFilename)
+
+# assumes that the file to rename exists
+def renameFileOnDisk(oldName, newName): 
+    os.rename(filestoreDirectory + oldName, filestoreDirectory + newName)
 
 class Filestore():
     def __init__(self):
         self.fileMap = {} # Convert this to a cache later
 
+    # Does nothing if the file already exists 
+    def addFile(self, encryptedFile):
+        encryptedFilename = encryptedFile.encryptedName 
+        if !fileExists(encryptedFilename):
+            writeFileToDisk(encryptedFile)
+
+    # Returns None if file does not exist
+    def getFile(self, encryptedFilename): 
+        if !fileExists(encryptedFilename):
+            return None 
+        return getFileFromDisk(encryptedFilename)
+
+    # Does nothing if file does not exist 
+    def deleteFile(self, encryptedFilename):
+        if !fileExists(encryptedFilename):
+            return None
+        deleteFileOnDisk(encryptedFilename)
+
+    # Does nothing if the file doesn't already exist
+    def updateFile(self, encryptedFilename, encryptedFile): 
+        if !fileExists(encryptedFilename):
+            return None
+        deleteFile(encryptedFilename)
+        addFile(encryptedFile)
+
+    # Does nothing if the file to rename does not exist 
+    # or if the new file name is already used 
+    def renameFile(self, encryptedFilename, newEncryptedFilename):
+        if !fileExists(encryptedFilename) or fileExists(newEncryptedFilename):
+            return
+        renameFile(encryptedFilename, newEncryptedFilename)
+
+    """ OLD IN MEMORY CODE 
     def addFile(self, encryptedFile):
         encryptedFilename = encryptedFile.encryptedName
         if encryptedFilename in self.fileMap:
@@ -36,6 +83,8 @@ class Filestore():
         if encryptedFilename in self.fileMap:
             self.fileMap[encryptedFilename] = encryptedFile
 
+
+
     def renameFile(self, encryptedFilename, newEncryptedFilename):
         if encryptedFilename not in self.fileMap:
             raise Exception("File to rename does not exist")
@@ -43,6 +92,7 @@ class Filestore():
             raise Exception("New filename already exists")
         fileObj = self.fileMap[encryptedFilename]
         self.fileMap[newEncryptedFilename] = fileObj
+    """
     
 
 
