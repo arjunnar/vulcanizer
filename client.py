@@ -1,55 +1,90 @@
 ## client-side interface
 
 import hashlib
+import Crypto.PublicKey.RSA as RSA
+from Crypto.Cipher import AES
+from Crypto import Random
+import ClientFile
+
+
+MockServer = {}
+initVector = Random.new().read(AES.block_size)
 
 class VulcanClient:
     def __init__(self, username):
 	# maps unencrypted filenames to hash of file contents
         self.fileHashesMap = None
-        self.fileKeyMap = None
-        self.rsaPubKey = None
-        self.rsaPrivateKay = None
+        self.fileKeysMap = None
+        self.rsaPublicKey = None
+        self.rsaPrivateKey = None
         self.username = username
+        self.rsaKeyBits = 2048
         self.register(username)
     
     def register(self, username):
-        self.rsaPubKey = 
-        self.rsaPrivateKay = 
         self.fileHashesMap = {} # Convert this to a cache later
-        self.fileKeyMap = {}
+        self.fileKeysMap = {}
+        self.rsaPublicKey, self.rsaPrivateKey = self.newRSAKeyPair()
 
     def newRSAKeyPair(self):
-        
+        newKey = RSA.generate(self.rsaKeyBits)
+        publicKey = newKey.publickey().exportKey("PEM")
+        privateKey = newKey.exportKey("PEM")
+        return (publicKey, privateKey)
 
+    def newFileEncryptionKey(self):
+        newRandomKey = b'0123456789abcdef'
+        # Random.getrandbits(16)
+        return newRandomKey
 
     def addFile(self, clientFile):
         self.addFileHash(clientFile)
+        fileEncryptionKey = self.newFileEncryptionKey()
+        self.fileKeysMap[clientFile.name] = fileEncryptionKey
 
         # encrypt fileName
         # encrypt fileContents
+        global initVector
+        cipher = AES.new(fileEncryptionKey, AES.MODE_CFB, initVector)
+
+        encFileName = cipher.encrypt(clientFile.name)
+        encFileContents = cipher.encrypt(clientFile.contents)
+
         # call to server to store file
+        global MockServer
+        MockServer[encFileName] = encFileContents
 
     def addFileHash(self, clientFile):
         filename = clientFile.name
         contentsHash = hashlib.sha1(clientFile.contents)
-        self.fileHashesMap[filename, contentsHash]
+        self.fileHashesMap[filename] = contentsHash
 
 
     def getFile(self, filename):
         # encrypt filename
+        fileEncryptionKey = self.fileKeysMap[filename]
+        global initVector
+        cipher = AES.new(fileEncryptionKey, AES.MODE_CFB, initVector)
+        encFileName = cipher.encrypt(filename)
+
         # call to server to get file contents
+        global MockServer
+        encFileContents = MockServer[encFileName]
 
         # unencrypt file contents
-        if !self.validContents(filename, contents):
-            # raise warning - file may be corrupt.
+        fileContents = cipher.decrypt(encFileContents)
 
-        clientFile = ClientFile(filename, contents)    
+        if not self.validContents(filename, fileContents):
+            # raise warning - file may be corrupt.
+            pass
+
+        clientFile = ClientFile.ClientFile(filename, fileContents)    
         return clientFile
 
 
     def validContents(self, filename, contents):
         contentsHash = hashlib.sha1(contents)
-        previousHash = fileHashesMap[filename]
+        previousHash = self.fileHashesMap[filename]
         return contentsHash == previousHash
 
     def deleteFile(self, filename):
