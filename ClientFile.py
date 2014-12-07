@@ -28,8 +28,9 @@ class ClientFile:
 
 class ClientFileMetaData:
     def __init__(self):
-        self.signature = None
+        # AES key for permissions.
         self.accessKey = None
+        self.fileWriteKey = None
         self.permissionsMap = {}
 
     def addPermission(self, username, readKey, writeKey):
@@ -42,12 +43,11 @@ class ClientFileMetaData:
     def getPermission(self, username):
     	return self.permissionsMap[username]
 
-    def setSignature(self, signature):
-    	self.signature = signature
-
     def setAccessKey(self, key):
     	self.accessKey = key
 
+    def setFileWriteKey(self, key):
+        self.fileWriteKey = key
 
 
 
