@@ -6,21 +6,7 @@ import urllib
 import struct
 from httplib import *
 
-def build_request(fileName):
-    req = "GET /" + \
-          fileName + \
-          " HTTP/1.1\r\n\r\n"
-    return req
-
-
-def build_post_request(fileName, contents):
-    req = "POST /"
-    return req
-
-
-####
-
-def send_req(host, port, req):
+def send_get_req(host, port, req):
     connection = HTTPConnection(host, port)
     connection.connect()
     connection.set_debuglevel(1)
@@ -31,7 +17,8 @@ def send_req(host, port, req):
     connection.close()
     return response.read()
 
-def send_http_request(host, port, path):
+
+def send_post_request(host, port, path):
     connection = HTTPConnection(host, port)
     connection.connect()
     connection.set_debuglevel(1)
@@ -45,7 +32,6 @@ def send_http_request(host, port, path):
     connection.close()
     # print response.status
     return response.read()
-####
     
 
 if len(sys.argv) != 4:
@@ -56,10 +42,9 @@ try:
     host = sys.argv[1]
     port = sys.argv[2]
     fileName = sys.argv[3]
-    send_http_request(host,port,"/" + fileName)
 
-    resp = send_req(sys.argv[1], int(sys.argv[2]), "/" + fileName)
-    print("HTTP response:")
+    resp = send_post_req(sys.argv[1], int(sys.argv[2]), "/" + fileName)
+    
     print(resp)
 except:
     print("Exception:")

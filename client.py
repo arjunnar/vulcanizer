@@ -3,12 +3,28 @@
 import hashlib
 
 class VulcanClient:
-    def __init__(self):
+    def __init__(self, username):
 	# maps unencrypted filenames to hash of file contents
-        self.fileHashesMap = {} # Convert this to a cache later
+        self.fileHashesMap = None
+        self.fileKeyMap = None
+        self.rsaPubKey = None
+        self.rsaPrivateKay = None
+        self.username = username
+        self.register(username)
     
+    def register(self, username):
+        self.rsaPubKey = 
+        self.rsaPrivateKay = 
+        self.fileHashesMap = {} # Convert this to a cache later
+        self.fileKeyMap = {}
+
+    def newRSAKeyPair(self):
+        
+
+
     def addFile(self, clientFile):
         self.addFileHash(clientFile)
+
         # encrypt fileName
         # encrypt fileContents
         # call to server to store file
@@ -72,3 +88,7 @@ class VulcanClient:
 
     def decryptFileContents(encryptedFileContents):
         return fileContents
+
+    def generateEncryptionKey():
+        pass
+        
