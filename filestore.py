@@ -1,3 +1,17 @@
+filestoreDirectory = "filestore/"
+
+def testWriteToDisk():
+   f = EncryptedFile('testFile.txt', 'testContents')
+   writeFileToDisk(f)
+
+def writeFileToDisk(encryptedFile): 
+    filename = filestoreDirectory + encryptedFile.encryptedName
+    f = open(filename, 'w+')
+    f.write(encryptedFile.encryptedContents)
+    
+
+
+
 class Filestore():
     def __init__(self):
         self.fileMap = {} # Convert this to a cache later
@@ -8,7 +22,6 @@ class Filestore():
             raise Exception("File with that name already exists")
         if encryptedFilename not in self.fileMap:
             self.fileMap[encryptedFilename] = encryptedFile
-        # Need to put the file contents on disk
 
     def getFile(self, encryptedFilename):
         if encryptedFilename not in self.fileMap:
@@ -30,11 +43,13 @@ class Filestore():
             raise Exception("New filename already exists")
         fileObj = self.fileMap[encryptedFilename]
         self.fileMap[newEncryptedFilename] = fileObj
-        
+    
+
+
 class EncryptedFile():
     def __init__ (self, name, contents):
         self.encryptedName = name
         self.encryptedContents = contents
-        
-            
+
+
             
