@@ -4,6 +4,7 @@ import hashlib
 import Crypto.PublicKey.RSA as RSA
 from Crypto.Cipher import AES
 from Crypto import Random
+from Crypto.Hash import SHA256
 import ClientFile
 import pickle
 from Crypto.Cipher import PKCS1_OAEP
@@ -12,142 +13,180 @@ from base64 import *
 
 
 class VulcanClient:
-    def __init__(self, username):
+    def __init__(self):
+        self.username = None
 	   # maps unencrypted filenames to hash of file contents
         self.fileHashesMap = None
         self.fileKeysMap = None
         # map of (shared) filename to encrypted filename 
         self.sharedFilenamesMap = None
+        self.encryptedFilenamesMap = None
         self.rsaPublicKey = None
         self.rsaPrivateKey = None
-        self.username = username
         self.rsaKeyBits = 2048
-        self.register(username)
+        self.signPublicKey = None
+        self.signPrivateKey = None
+        self.initVectorSize = 16
     
     def register(self, username):
+        if self.username != None:
+            raise Exception("Already registered user!")
+
+        self.username = username
         self.fileHashesMap = {} # Convert this to a cache later
         self.fileKeysMap = {}
         self.sharedFilenamesMap = {}
+        self.encryptedFilenamesMap = {}
         self.rsaPublicKey, self.rsaPrivateKey = self.newRSAKeyPair()
+        self.signPublicKey, self.signPrivateKey = self.newRSAKeyPair()
 
     def newRSAKeyPair(self):
-        newKey = RSA.generate(self.rsaKeyBits)
+        newKey = self.newRSAKey()
         publicKey = newKey.publickey().exportKey("PEM")
         privateKey = newKey.exportKey("PEM")
         return (publicKey, privateKey)
 
+    def newRSAKey(self):
+        return RSA.generate(self.rsaKeyBits)
+
     def newFileEncryptionKey(self):
-        newRandomKey = b'0123456789abcdef'
         # Random.getrandbits(16)
-        return newRandomKey
+        return Random.new().read(AES.block_size)
 
-    def addFile(self, clientFile, userPermissions):
+    def newInitVector(self):
+        return Random.new().read(self.initVectorSize)
+
+    def addFile(self, clientFile, userPermissions = None):
         self.addFileHash(clientFile)
+        
+        filename = clientFile.name
+        contents = clientFile.contents
+        # encrypt file
         fileEncryptionKey = self.newFileEncryptionKey()
-        print fileEncryptionKey
-        self.fileKeysMap[clientFile.name] = fileEncryptionKey
+        self.fileKeysMap[filename] = fileEncryptionKey
 
-        permissionsMap = self.generatePermissionsMap(fileEncryptionKey, userPermissions)
-        clientFile.userPermissionsMap(permissionsMap)
+        fileSignPublicKey, fileSignPrivateKey = self.newRSAKeyPair()
+        clientFile.metadata.setAccessKey(fileSignPublicKey)
 
-        # encrypt fileName
-        # encrypt fileContents
-        global initVector
+        permissionsMap = self.generatePermissionsMap(fileEncryptionKey, fileSignPrivateKey, userPermissions)
+
+        clientFile.metadata.setPermissionsMap(permissionsMap)
+
+        # use new initVector
+        initVector = self.newInitVector()
         cipher = AES.new(fileEncryptionKey, AES.MODE_CFB, initVector)
 
-        encFileName = b64encode(initVector + cipher.encrypt(clientFile.name)).decode(encoding='utf-8')
-        encFileContents = b64encode(initVector + cipher.encrypt(clientFile.contents)).decode(encoding='utf-8')
-        pickledMetadata = pickle.dumps(clientFile.permissionsMap)
+        encryptedFilename = cipher.encrypt(clientFile.name)
+        encryptedFileContents = initVector + cipher.encrypt(clientFile.contents)
+        pickledMetadata = pickle.dumps(clientFile.metadata)
+
+        self.encryptedFilenamesMap[clientFile.name] = encryptedFilename
 
         # call to server to store file
-        global MockServer
-        MockServer[encFileName] = encFileContents, pickledMetadata
+        MockServer[encryptedFilename] = (encryptedFileContents, pickledMetadata)
 
-    def generatePermissionsMap(self, fileEncryptionKey, userPermissions):
+    def generatePermissionsMap(self, fileEncryptionKey,fileSignPrivateKey, userPermissions):
         permissionsMap = {}
 
-        for user in userPermissions:
-            # check read permission r+w tuple
-            if userPermissions[user][0]:
+        for username in userPermissions:
+            # check read permission r+w tuple, True/False?
+            read, write = userPermissions[username]
+            readKey = None
+            writeKey = None
+            if read:
                 # RSA encode with public key
-                userPublicKey = userPublicKeys[user]
-                readKey = self.makeReadKey(userPublicKey, fileEncryptionKey)
-                permissionsMap[user] = (readKey, None)
+                userPublicKey = userPublicKeys[username]
+                readKey = self.encryptReadKey(userPublicKey, fileEncryptionKey)
+            
+            if write:
+                writeKey = self.encryptedWriteKey(userPublicKey, fileSignPrivateKey)
+
+            permissionsMap[username] = (readKey, writeKey)
 
         return permissionsMap
-
 
     def addFileHash(self, clientFile):
         filename = clientFile.name
         contentsHash = hashlib.sha1(clientFile.contents)
         self.fileHashesMap[filename] = contentsHash
 
-
     def getSharedFile(self, filename, encryptedFilename = None):
+        # use pervious encryptedFilename
         if encryptedFilename == None:
-            if filename in self.sharedFilenamesMap:
-                encryptedFilename = self.sharedFilenamesMap[fileName]
-            else:
+            if filename not in self.sharedFilenamesMap:
                 raise Exception("File not shared with you!")
+            
+            encryptedFilename = self.sharedFilenamesMap[fileName]
+
         else:
             self.sharedFilenamesMap[filename] = encryptedFilename
 
         # call to server to get file contents
-        global MockServer
-        encFileContents, pickledMetadata = MockServer[encryptedFilename]
+        encryptedFileContents, pickledMetadata = MockServer[encryptedFilename]
 
-        # get unpickle metadata
-        permissionsMap = pickle.loads(pickledMetadata)
-        readKey, writeKey = permissionsMap[self.username]
+        # unpickle metadata
+        metadata = pickle.loads(pickledMetadata)
+        readKey, writeKey = self.getReadWriteKeys(metadata.permissionsMap)
 
         if readKey == None:
-            raise Exception("")
-        else:
-            fileEncryptionKey = self.getReadKey(readKey)
-            print fileEncryptionKey
+            raise Exception("You don't have permission to access this file.")
+        if writeKey == None:
+            print "You don't have permission to edit this file."
 
         # unencrypt file contents
-        global initVector
-        cipher = AES.new(fileEncryptionKey, AES.MODE_CFB, initVector)
+        initVector = encryptedFileContents[:self.initVectorSize]
+        cipher = AES.new(readKey, AES.MODE_CFB, initVector)
 
-        fileContents = cipher.decrypt(b64decode(encFileContents[16:])).decode(encoding='utf-8')
-        
-        clientFile = ClientFile.ClientFile(filename, fileContents, permissionsMap)   
+        fileContents = cipher.decrypt(encryptedFileContents[self.initVectorSize:]).rstrip(b"\0")
 
-        return clientFile
+        sharedFile = ClientFile.ClientFile(filename, fileContents, metadata)   
 
+        return sharedFile
 
-    def makeReadKey(self, userPublicKey, encryptionKey):
+    def getReadWriteKeys(self, permissionsMap):
+        if permissionsMap == None:
+            return (None, None)
+        readKey, writeKey = permissionsMap[self.username]
+        if readKey != None:
+            readKey = self.decryptReadKey(readKey)
+        if writeKey != None:
+            writeKey = self.decryptWriteKey(writeKey)
+        return (readKey, writeKey)
+
+    def encryptReadKey(self, userPublicKey, encryptionKey):
         rsakey = RSA.importKey(userPublicKey)
         rsakey = PKCS1_OAEP.new(rsakey)
-        encrypted = rsakey.encrypt(encryptionKey)
-        return encrypted
+        encryptedKey = rsakey.encrypt(encryptionKey)
+        return encryptedKey
 
-    def getReadKey(self, readKey):
+    def encryptWriteKey(self, userPublicKey, fileSignPrivateKey):
+        return self.encryptReadKey(userPublicKey, fileSignPrivateKey)
+
+    def decryptReadKey(self, readKey):
         # use RSA keys to extract AES file encryption key from readKey
         rsakey = RSA.importKey(self.rsaPrivateKey)
         rsakey = PKCS1_OAEP.new(rsakey)
-        decrypted = rsakey.decrypt(readKey)
-        return decrypted
+        decryptedKey = rsakey.decrypt(readKey)
+        return decryptedKey
 
+    def decryptWriteKey(self, writeKey):
+        return self.decryptWriteKey(writeKey)
 
-    def getOwnFile(self, filename):
-        if filename not in self.fileKeysMap:
+    def getFile(self, filename):
+        if filename not in self.fileKeysMap or filename not in self.encryptedFilenamesMap:
             raise Exception("File not owned, possibly shared.")
 
-        # encrypt filename
         fileEncryptionKey = self.fileKeysMap[filename]
-        
-        global initVector
-        cipher = AES.new(fileEncryptionKey, AES.MODE_CFB, initVector)
-        encFileName = b64encode(initVector + cipher.encrypt(filename)).decode(encoding='utf-8')
+        encryptedFilename = self.encryptedFilenamesMap[filename]
 
         # call to server to get file contents
-        global MockServer
-        encFileContents, pickledMetadata = MockServer[encFileName]
+        encryptedFileContents, pickledMetadata = MockServer[encryptedFilename]
+        
+        initVector = encryptedFileContents[:self.initVectorSize]
+        cipher = AES.new(fileEncryptionKey, AES.MODE_CFB, initVector)
 
         # unencrypt file contents
-        fileContents = cipher.decrypt(b64decode(encFileContents[16:])).decode(encoding='utf-8')
+        fileContents = cipher.decrypt(encryptedFileContents[self.initVectorSize:])
 
         if not self.validContents(filename, fileContents):
             # raise warning - file may be corrupt.
@@ -161,29 +200,42 @@ class VulcanClient:
         return clientFile
 
 
-
     def validContents(self, filename, contents):
         contentsHash = hashlib.sha1(contents)
         previousHash = self.fileHashesMap[filename]
         return contentsHash == previousHash
 
     def deleteFile(self, filename):
-        encryptFilename = encryptedFilename(filename)
+        encryptedFilename = encryptedFilenamesMap[filename]
+        del self.fileHashesMap[fileName]
         # call to server to delete for encryptedFileName
         # return response-type thing
-        del self.fileHashesMap[fileName]
+        del MockServer[encryptedFilename]
 
-        return 
-
-    def updateFile(self, clientFile):
-        self.addFileHash(clientFile)
-        contents = clientFile.contents
+    '''
+    assume that filename has not changed.
+    '''
+    def updateFile(self, filename, clientFile, signature):
+        self.addFileHash(clientFile)  
+        
         filename = clientFile.name
-        encryptFilename = encryptFilename(filename)
-        encryptedFileContents = encryptFileContents(contents)
+        contents = clientFile.contents
+        metadata = clientFile.metadata
 
-        # call to server to update
-        # return response-type thing
+        # need to check for write permission.
+        accessKey = metadata.accessKey
+        contentsHash = SHA256.new(contents).digest()
+
+        if self.hasWritePermission(accessKey, contentsHash, signature):
+            # user has write permissions
+            # call to server to update
+            # return response-type thing
+            pass
+
+        # if owner, can also write metadata.
+
+    def hasWritePermission(self, accessKey, contentsHash, signature):
+        return accessKey.verify(contentsHash, signature)
 
 
     def renameFile(self, filename, newFilename):
@@ -200,10 +252,4 @@ class VulcanClient:
     def encryptFileContents(contents):
         encryptedFileContents = ""
         return  
-
-    def decryptFileContents(encryptedFileContents):
-        return fileContents
-
-    def generateEncryptionKey():
-        pass
         

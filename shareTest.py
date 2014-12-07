@@ -10,8 +10,10 @@ import globalScope
 print "Starting test..."
 # create new clients
 # arjun wants to share a file with yuta
-vc1 = VulcanClient("dorayuta")
-vc2 = VulcanClient("arjunnar")
+vc1 = VulcanClient()
+vc1.register("dorayuta")
+vc2 = VulcanClient()
+vc2.register("arjunnar")
 
 print "Made clients."
 
@@ -20,23 +22,20 @@ arjunnarRSAPublicKey = vc2.rsaPublicKey
 globalScope.userPublicKeys["arjunnar"] = arjunnarRSAPublicKey
 globalScope.userPublicKeys["dorayuta"] = dorayutaRSAPublicKey
 
-testFileContents = "aaaabbbbccccdddd"
-testFileName = "testFileName"
+testFileContents = "aaaabbbbccccdddd this is the rest of the file contents."
+testFilename = "testFileName"
 permissionMap = {"arjunnar": (True, None)}
 
-cf = ClientFile.ClientFile(testFileName, testFileContents)
+cf = ClientFile.ClientFile(testFilename, testFileContents)
 vc1.addFile(cf, permissionMap)# encrypt filename
 
 # get encrypted file name
-fileEncryptionKey = vc1.fileKeysMap[testFileName]
-cipher = AES.new(fileEncryptionKey, AES.MODE_CFB, globalScope.initVector)
-# encrypt testFileName
-encFilename = b64encode(globalScope.initVector + cipher.encrypt(testFileName))
+encryptedFilename = vc1.encryptedFilenamesMap[testFilename]
 
-getCF = vc2.getSharedFile(testFileName, encFilename)
+sharedFile = vc2.getSharedFile(testFilename, encryptedFilename)
 
 print "original file contents: " + testFileContents
 
-print "shared file contents: " + getCF.contents
+print "shared file contents: " + sharedFile.contents
 
 print "End of test."
