@@ -11,3 +11,6 @@ from Crypto.Cipher import PKCS1_OAEP
 
 MockServer = {}
 userPublicKeys = {}
+
+dbDirectoryLoc = '/db'
+fileKeysDBLoc = '/fileKeys.db'

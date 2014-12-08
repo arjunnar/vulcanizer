@@ -5,7 +5,7 @@ class ClientFile:
     def __init__ (self, name, contents, metadata = None):
         self.name = name
         self.contents = contents
-        self.metadata = ClientFileMetaData()
+        self.metadata = ClientFileMetadata()
         if metadata != None:
             self.metadata = metadata
 
@@ -26,7 +26,7 @@ class ClientFile:
     	self.metadata.setAccessKey(key)
 
 
-class ClientFileMetaData:
+class ClientFileMetadata:
     def __init__(self):
         # AES key for permissions.
         self.accessKey = None

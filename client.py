@@ -8,8 +8,11 @@ from Crypto.Hash import SHA256
 import ClientFile
 import pickle
 from Crypto.Cipher import PKCS1_OAEP
-from globalScope import *
+import globalScope
+from globalScope import MockServer, userPublicKeys
 from base64 import *
+import sqlite3
+import os
 
 
 class VulcanClient:
@@ -27,18 +30,49 @@ class VulcanClient:
         self.signPublicKey = None
         self.signPrivateKey = None
         self.initVectorSize = 16
-    
+        # establish connection with dbs.
+        self.dbConn = None
+        self.dbCursor = None
+        self.userDir = None
+        self.wd = os.getcwd()
+
+    def initDB(self):
+        fileKeysPath = self.userDir + globalScope.dbDirectoryLoc + globalScope.fileKeysDBLoc
+        # will create db file if doesn't exist
+        if not os.path.exists(fileKeysPath):
+            self.dbConn = sqlite3.connect(fileKeysPath)
+            self.dbCursor = self.dbConn.cursor()
+            # Create table
+            self.dbCursor.execute('''CREATE TABLE fileKeys
+                         (filename text, encryptedFilename text, readKey text)''')
+            self.dbConn.commit()
+
+        else:
+            self.dbConn = sqlite3.connect(fileKeysPath)
+            self.dbCursor = self.dbConn.cursor()
+            self.dbCursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+            print self.dbCursor.fetchall()
+
+
     def register(self, username):
         if self.username != None:
             raise Exception("Already registered user!")
 
         self.username = username
+        # create table directories. chroot?
+        self.userDir = self.wd + "/" + hashlib.sha1(self.username).hexdigest()
+        if not os.path.exists(self.userDir):
+            os.mkdir(self.userDir)
+            dbPath = self.userDir + globalScope.dbDirectoryLoc
+            os.mkdir(dbPath)
+
         self.fileHashesMap = {} # Convert this to a cache later
         self.fileKeysMap = {}
         self.sharedFilenamesMap = {}
         self.encryptedFilenamesMap = {}
         self.rsaPublicKey, self.rsaPrivateKey = self.newRSAKeyPair()
         self.signPublicKey, self.signPrivateKey = self.newRSAKeyPair()
+        self.initDB()
 
     def newRSAKeyPair(self):
         newKey = self.newRSAKey(self.rsaKeyBits)
@@ -50,7 +84,6 @@ class VulcanClient:
         newKey = self.newRSAKey(768)
         publicKey = newKey.publickey().exportKey("PEM")
         privateKey = newKey.exportKey("PEM")
-        print publicKey
         return (publicKey, privateKey)
 
     def newRSAKey(self, rsaKeyBits):
@@ -67,6 +100,7 @@ class VulcanClient:
         self.addFileHash(clientFile)
         
         filename = clientFile.name
+
         contents = clientFile.contents
         # encrypt file
         fileEncryptionKey = self.newFileEncryptionKey()
@@ -92,10 +126,19 @@ class VulcanClient:
         encryptedFileContents = initVector + cipher.encrypt(clientFile.contents)
         pickledMetadata = pickle.dumps(clientFile.metadata)
 
+        ### UPDATE db
+        self.dbAddFile(filename, encryptedFilename, fileEncryptionKey)
+        
         self.encryptedFilenamesMap[clientFile.name] = encryptedFilename
 
         # call to server to store file
         MockServer[encryptedFilename] = (encryptedFileContents, pickledMetadata)
+
+    def dbAddFile(self, filename, encryptedFilename, fileEncryptionKey):
+        ### UPDATE db with filename, encryptedFilename, fileEncryptionKey
+        values = (filename, "b".decode("utf-8"), "c".decode("utf-8"))
+        self.dbCursor.execute("INSERT INTO fileKeys VALUES (?,?,?)", values)
+        self.dbConn.commit()
 
     def generatePermissionsMap(self, fileEncryptionKey,fileSignPrivateKey, accessKeyIV, accessKey, userPermissions):
         permissionsMap = {}
@@ -115,7 +158,6 @@ class VulcanClient:
                 cipher = AES.new(accessKey, AES.MODE_CFB, accessKeyIV)
                 # if user has write but not read, userPublicKey will cause problems.
                 middle = cipher.encrypt(fileSignPrivateKey)
-                print middle
                 writeKey = self.encryptWriteKey(userPublicKey, middle)
 
             permissionsMap[username] = (readKey, writeKey)
@@ -163,7 +205,7 @@ class VulcanClient:
     def getReadWriteKeys(self, metadata):
         if metadata.permissionsMap == None:
             return (None, None)
-        readKey, writeKey = permissionsMap[self.username]
+        readKey, writeKey = metadata.permissionsMap[self.username]
         if readKey != None:
             readKey = self.decryptReadKey(readKey)
         if writeKey != None:
