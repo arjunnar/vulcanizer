@@ -12,7 +12,7 @@ from globalScope import MockServer, userPublicKeys
 import sqlite3
 import os
 import clientdb
-
+import clientCrypto
 
 class VulcanClient:
     def __init__(self):
@@ -42,6 +42,7 @@ class VulcanClient:
             raise Exception("Already registered user!")
 
         self.username = username
+        
         # initialize databases
         self.db = clientdb.ClientDb(self.username)
         self.db.setupAllDbs()
@@ -51,18 +52,8 @@ class VulcanClient:
         self.sharedFilenamesMap = {}
         self.encryptedFilenamesMap = {}
 
-        self.rsaPublicKey, self.rsaPrivateKey = self.newRSAKeyPair()
-        self.signPublicKey, self.signPrivateKey = self.newRSAKeyPair()
-
-    def newRSAKeyPair(self, rsakey=None):
-        if rsakey is None:
-            rsakey = self.newRSAKey()
-        publicKey = rsakey.publickey().exportKey("PEM")
-        privateKey = rsakey.exportKey("PEM")
-        return (publicKey, privateKey)
-
-    def newRSAKey(self):
-        return RSA.generate(self.rsaKeyBits)
+        self.rsaPublicKey, self.rsaPrivateKey = clientCrypto.newRSAKeyPair(self.rsaKeyBits)
+        self.signPublicKey, self.signPrivateKey = clientCrypto.newRSAKeyPair(self.rsaKeyBits)
 
     def newAESEncryptionKey(self):
         # Random.getrandbits(16)
@@ -86,8 +77,8 @@ class VulcanClient:
         fileEncryptionKey = self.newAESEncryptionKey()
         self.fileKeysMap[filename] = fileEncryptionKey
 
-        fileRSAKey = self.newRSAKey()
-        fileWritePublicKey, fileWritePrivateKey = self.newRSAKeyPair(fileRSAKey)
+        fileRSAKey = clientCrypto.newRSAKey(self.rsaKeyBits)
+        fileWritePublicKey, fileWritePrivateKey = clientCrypto.newRSAKeyPair(self.rsaKeyBits, fileRSAKey)
         clientFile.metadata.setFileWritePublicKey(fileWritePublicKey)
         signFile = self.rsaSign(contents, fileRSAKey)
         clientFile.setWriteSignature(signFile)
