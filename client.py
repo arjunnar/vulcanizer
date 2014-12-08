@@ -55,15 +55,8 @@ class VulcanClient:
         self.rsaPublicKey, self.rsaPrivateKey = clientCrypto.newRSAKeyPair(self.rsaKeyBits)
         self.signPublicKey, self.signPrivateKey = clientCrypto.newRSAKeyPair(self.rsaKeyBits)
 
-    def newAESEncryptionKey(self):
-        # Random.getrandbits(16)
-        return Random.new().read(AES.block_size)
-
     def getJunkData(self):
         return Random.new().read(self.junkDataSize)
-
-    def newInitVector(self):
-        return Random.new().read(self.initVectorSize)
 
     def addFile(self, clientFile, userPermissions):
         self.addMetadataHash(clientFile)
@@ -71,21 +64,19 @@ class VulcanClient:
         filename = clientFile.name
         contents = clientFile.contents
 
-        # junk the beginning of contents
-
         # encrypt filename
-        fileEncryptionKey = self.newAESEncryptionKey()
+        fileEncryptionKey = clientCrypto.newAESEncryptionKey()
         self.fileKeysMap[filename] = fileEncryptionKey
 
         fileRSAKey = clientCrypto.newRSAKey(self.rsaKeyBits)
         fileWritePublicKey, fileWritePrivateKey = clientCrypto.newRSAKeyPair(self.rsaKeyBits, fileRSAKey)
         clientFile.metadata.setFileWritePublicKey(fileWritePublicKey)
-        signFile = self.rsaSign(contents, fileRSAKey)
+        signFile = clientCrypto.rsaSign(contents, fileRSAKey)
         clientFile.setWriteSignature(signFile)
 
         # generate another AES key to encrypt the FileWriteKey
-        fileWriteEncryptionKey = self.newAESEncryptionKey()
-        fileWriteEncryptionIV = self.newInitVector()
+        fileWriteEncryptionKey = clientCrypto.newAESEncryptionKey()
+        fileWriteEncryptionIV = clientCrypto.newInitVector(self.initVectorSize)
 
         # encrypt the FileWriteKey
         cipher = AES.new(fileWriteEncryptionKey, AES.MODE_CFB, fileWriteEncryptionIV)
@@ -97,9 +88,11 @@ class VulcanClient:
         clientFile.setPermissionsMap(permissionsMap)
 
         # encrypt filename and file contents
-        initVector = self.newInitVector()
+        initVector = clientCrypto.newInitVector(self.initVectorSize)
         cipher = AES.new(fileEncryptionKey, AES.MODE_CFB, initVector)
         encryptedFilename = cipher.encrypt(clientFile.name)
+
+        # junk the beginning of contents
         encryptedFileContents = initVector + cipher.encrypt(self.getJunkData() + clientFile.contents)
         pickledMetadata = pickle.dumps(clientFile.metadata)
         
@@ -197,34 +190,18 @@ class VulcanClient:
         return (readKey, writeKey)
 
     def encryptReadKey(self, userPublicKey, encryptionKey):
-        return self.rsaEncryptKey(userPublicKey, encryptionKey)
+        return clientCrypto.rsaEncryptKey(userPublicKey, encryptionKey)
 
     def encryptWriteKey(self, userPublicKey, fileWriteEncryptionKey, fileWriteEncryptionIV):
-        return self.rsaEncryptKey(userPublicKey, fileWriteEncryptionIV + fileWriteEncryptionKey)
-
-    def rsaSign(self, toSign, rsaKey):
-        toSignHash = SHA256.new(toSign).digest()
-        return rsaKey.sign(toSignHash, '')
-
-    def rsaEncryptKey(self, publicKey, keyToEncrypt):
-        rsakey = RSA.importKey(publicKey)
-        rsakey = PKCS1_OAEP.new(rsakey)
-        encryptedKey = rsakey.encrypt(keyToEncrypt)
-        return encryptedKey
-
-    def rsaDecryptKey(self, keyToDecrypt):
-        rsakey = RSA.importKey(self.rsaPrivateKey)
-        rsakey = PKCS1_OAEP.new(rsakey)
-        decryptedKey = rsakey.decrypt(keyToDecrypt)
-        return decryptedKey
+        return clientCrypto.rsaEncryptKey(userPublicKey, fileWriteEncryptionIV + fileWriteEncryptionKey)
 
     def decryptReadKey(self, readKey):
         # use RSA keys to extract AES file encryption key from readKey
-        return self.rsaDecryptKey(readKey)
+        return clientCrypto.rsaDecryptKey(self.rsaPrivateKey, readKey)
 
     def decryptWriteKey(self, writeKey, fileWriteAccessKey):
         # initial result is still AES encrypted.
-        middleKey = self.rsaDecryptKey(writeKey)
+        middleKey = clientCrypto.rsaDecryptKey(self.rsaPrivateKey, writeKey)
         fileWriteEncryptionIV = middleKey[:self.initVectorSize]
         fileWriteEncryptionKey = middleKey[self.initVectorSize:]
         cipher = AES.new(fileWriteEncryptionKey, AES.MODE_CFB, fileWriteEncryptionIV)
@@ -284,6 +261,8 @@ class VulcanClient:
             # return response-type thing
             print "Has Write Permissions!"
             pass
+
+        # if owner, also update metadata.
 
         # if owner, can also write metadata.
 
