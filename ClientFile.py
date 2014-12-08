@@ -5,9 +5,13 @@ class ClientFile:
     def __init__ (self, name, contents, metadata = None):
         self.name = name
         self.contents = contents
+        self.writeSignature = None
         self.metadata = ClientFileMetadata()
         if metadata != None:
             self.metadata = metadata
+
+    def setWriteSignature(self, signature):
+        self.writeSignature = signature
 
     def addPermission(self, username, readKey, writeKey):
     	# readKey and writeKey are userRSAKey encryptions of the AES fileEncryptionKey

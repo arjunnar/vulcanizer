@@ -25,8 +25,6 @@ arjunnarRSAPublicKey = vc2.rsaPublicKey
 globalScope.userPublicKeys["arjunnar"] = arjunnarRSAPublicKey
 globalScope.userPublicKeys["dorayuta"] = dorayutaRSAPublicKey
 
-arjunnarRSAPrivateKey = vc2.rsaPrivateKey
-
 testFileContents = "aaaabbbbccccdddd this is the rest of the file contents."
 testFilename = "testFileName"
 permissionsMap = {"arjunnar": (True, True)}
@@ -42,6 +40,8 @@ encryptedFilename = vc1.encryptedFilenamesMap[testFilename]
 sharedFile = vc2.getSharedFile(testFilename, encryptedFilename)
 
 print "shared file contents: " + sharedFile.contents
+
+print "shared contents are same as original: " + str(sharedFile.contents == testFileContents)
 
 newFileContents = "aaaabbbbccccddd these are the new file contents."
 

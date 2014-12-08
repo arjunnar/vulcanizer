@@ -74,13 +74,14 @@ class VulcanClient:
         self.signPublicKey, self.signPrivateKey = self.newRSAKeyPair()
         self.initDB()
 
-    def newRSAKeyPair(self):
-        newKey = self.newRSAKey(self.rsaKeyBits)
-        publicKey = newKey.publickey().exportKey("PEM")
-        privateKey = newKey.exportKey("PEM")
+    def newRSAKeyPair(self, rsakey=None):
+        if rsakey == None:
+            rsakey = self.newRSAKey()
+        publicKey = rsakey.publickey().exportKey("PEM")
+        privateKey = rsakey.exportKey("PEM")
         return (publicKey, privateKey)
 
-    def newRSAKey(self, rsaKeyBits):
+    def newRSAKey(self):
         return RSA.generate(self.rsaKeyBits)
 
     def newAESEncryptionKey(self):
@@ -100,8 +101,11 @@ class VulcanClient:
         fileEncryptionKey = self.newAESEncryptionKey()
         self.fileKeysMap[filename] = fileEncryptionKey
 
+        fileRSAKey = self.newRSAKey()
         fileWritePublicKey, fileWritePrivateKey = self.newRSAKeyPair()
         clientFile.metadata.setFileWritePublicKey(fileWritePublicKey)
+        signFile = self.rsaSign(contents, fileRSAKey)
+        clientFile.setWriteSignature(signFile)
 
         # generate another AES key to encrypt the FileWriteKey
         fileWriteEncryptionKey = self.newAESEncryptionKey()
@@ -129,7 +133,7 @@ class VulcanClient:
         self.encryptedFilenamesMap[clientFile.name] = encryptedFilename
 
         # call to server to store file
-        MockServer[encryptedFilename] = (encryptedFileContents, pickledMetadata)
+        MockServer[encryptedFilename] = (encryptedFileContents, signFile, pickledMetadata)
 
     def dbAddFile(self, filename, encryptedFilename, fileEncryptionKey):
         ### UPDATE db with filename, encryptedFilename, fileEncryptionKey
@@ -176,7 +180,7 @@ class VulcanClient:
             self.sharedFilenamesMap[filename] = encryptedFilename
 
         # call to server to get file contents
-        encryptedFileContents, pickledMetadata = MockServer[encryptedFilename]
+        encryptedFileContents, signFile, pickledMetadata = MockServer[encryptedFilename]
 
         # unpickle metadata
         metadata = pickle.loads(pickledMetadata)
@@ -194,10 +198,20 @@ class VulcanClient:
         cipher = AES.new(readKey, AES.MODE_CFB, initVector)
 
         fileContents = cipher.decrypt(encryptedFileContents[self.initVectorSize:]).rstrip(b"\0")
+        if not self.validSignature(metadata.fileWritePublicKey, fileContents, signFile):
+            print "invalid signature!"
+
+        print "valid signature"
 
         sharedFile = ClientFile.ClientFile(filename, fileContents, metadata)   
 
         return sharedFile
+
+    def validSignature(self, publicKey, contents, signature):
+        contentsHash = SHA256.new(contents).digest()
+        rsakey = RSA.importKey(publicKey)
+        # rsakey = PKCS1_OAEP.new(rsakey)
+        return rsakey.verify(contentsHash, signature)
 
     def getReadWriteKeys(self, metadata):
         if metadata.permissionsMap == None or self.username not in metadata.permissionsMap:
@@ -214,6 +228,10 @@ class VulcanClient:
 
     def encryptWriteKey(self, userPublicKey, fileWriteEncryptionKey, fileWriteEncryptionIV):
         return self.rsaEncryptKey(userPublicKey, fileWriteEncryptionIV + fileWriteEncryptionKey)
+
+    def rsaSign(self, toSign, rsaKey):
+        toSignHash = SHA256.new(toSign).digest()
+        return rsaKey.sign(toSignHash, '')
 
     def rsaEncryptKey(self, publicKey, keyToEncrypt):
         rsakey = RSA.importKey(publicKey)
