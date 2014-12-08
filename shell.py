@@ -9,7 +9,7 @@ class Shell(cmd.Cmd):
         self.loggedIn = False
         self.username = None
         cmd.Cmd.__init__(self)
-        cmd.Cmd.prompt = '$  '
+        cmd.Cmd.prompt = '$ '
 
     """ PUBLIC API """
     def do_greet(self, line):
@@ -17,7 +17,20 @@ class Shell(cmd.Cmd):
 
     def do_EOF(self, line):
         return True
+
+    def do_status(self, line):
+        if self.username:
+            print "user: " + self.username
+        else:
+            print "No user logged in."
+
+    def do_exit(self, line):
+        return True
     
+    def do_ls(self, line):
+        print "Not Yet Implemented"
+        return
+
     def do_login(self, username):
         if self.username == username:
             print 'That user is already logged in'
@@ -29,6 +42,15 @@ class Shell(cmd.Cmd):
         
         self.username = username
         self.loggedIn = True
+
+    def do_logout(self, line):
+        if self.username == None:
+            print 'No user logged in.'
+            return
+        self.username = None
+        self.loggedIn = False
+        print 'Successfully logged out.'
+        return
 
     def do_register(self, username):
         if os.path.isdir('client/' + username):
@@ -66,7 +88,7 @@ class Shell(cmd.Cmd):
 
         # Call client's update file code
 
-    def do_delete_file(self, f)"
+    def do_delete_file(self, f):
         if not self.loggedIn:
             print 'Must login or register'
             return
@@ -78,7 +100,7 @@ class Shell(cmd.Cmd):
         # Call client's delete file code
 
     def do_get_file_from_server(self, f):
-         if not self.loggedIn:
+        if not self.loggedIn:
             print 'Must login or register'
             return
 
