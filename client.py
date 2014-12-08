@@ -30,6 +30,7 @@ class VulcanClient:
         self.signPublicKey = None
         self.signPrivateKey = None
         self.initVectorSize = 16
+        self.junkDataSize = 16
         # establish connection with dbs.
         self.dbConn = None
         self.dbCursor = None
@@ -75,7 +76,7 @@ class VulcanClient:
         self.initDB()
 
     def newRSAKeyPair(self, rsakey=None):
-        if rsakey == None:
+        if rsakey is None:
             rsakey = self.newRSAKey()
         publicKey = rsakey.publickey().exportKey("PEM")
         privateKey = rsakey.exportKey("PEM")
@@ -88,6 +89,9 @@ class VulcanClient:
         # Random.getrandbits(16)
         return Random.new().read(AES.block_size)
 
+    def getJunkData(self):
+        return Random.new().read(self.junkDataSize)
+
     def newInitVector(self):
         return Random.new().read(self.initVectorSize)
 
@@ -97,12 +101,14 @@ class VulcanClient:
         filename = clientFile.name
         contents = clientFile.contents
 
+        # junk the beginning of contents
+
         # encrypt filename
         fileEncryptionKey = self.newAESEncryptionKey()
         self.fileKeysMap[filename] = fileEncryptionKey
 
         fileRSAKey = self.newRSAKey()
-        fileWritePublicKey, fileWritePrivateKey = self.newRSAKeyPair()
+        fileWritePublicKey, fileWritePrivateKey = self.newRSAKeyPair(fileRSAKey)
         clientFile.metadata.setFileWritePublicKey(fileWritePublicKey)
         signFile = self.rsaSign(contents, fileRSAKey)
         clientFile.setWriteSignature(signFile)
@@ -124,7 +130,7 @@ class VulcanClient:
         initVector = self.newInitVector()
         cipher = AES.new(fileEncryptionKey, AES.MODE_CFB, initVector)
         encryptedFilename = cipher.encrypt(clientFile.name)
-        encryptedFileContents = initVector + cipher.encrypt(clientFile.contents)
+        encryptedFileContents = initVector + cipher.encrypt(self.getJunkData() + clientFile.contents)
         pickledMetadata = pickle.dumps(clientFile.metadata)
 
         ### UPDATE db
@@ -195,9 +201,10 @@ class VulcanClient:
             print "You have edit access to this file."
         # unencrypt file contents
         initVector = encryptedFileContents[:self.initVectorSize]
+        encryptedFileContents = encryptedFileContents[self.initVectorSize:]
         cipher = AES.new(readKey, AES.MODE_CFB, initVector)
 
-        fileContents = cipher.decrypt(encryptedFileContents[self.initVectorSize:]).rstrip(b"\0")
+        fileContents = cipher.decrypt(encryptedFileContents)[self.junkDataSize:]
         if not self.validSignature(metadata.fileWritePublicKey, fileContents, signFile):
             print "invalid signature!"
 
@@ -272,7 +279,7 @@ class VulcanClient:
         cipher = AES.new(fileEncryptionKey, AES.MODE_CFB, initVector)
 
         # unencrypt file contents
-        fileContents = cipher.decrypt(encryptedFileContents[self.initVectorSize:])
+        fileContents = cipher.decrypt(encryptedFileContents)[self.junkDataSize:]
 
         # get unpickle metadata
         metadata = pickle.loads(pickledMetadata)
@@ -283,7 +290,7 @@ class VulcanClient:
 
         clientFile = ClientFile.ClientFile(filename, fileContents, metadata)
 
-        return clientFilename
+        return clientFile
 
     def validMetadata(self, filename, metadata):
         metadataHash = hashlib.sha1(pickle.dumps(metadata))
