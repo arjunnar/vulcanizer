@@ -1,9 +1,9 @@
 # TASKS
 
-1) implement file owner RSA key signing/verification of metadata
-2) implement a basic SHELL
-3) complete db support
-4) complete other persistence support
+1) complete db support
+2) complete other persistence support
+3) implement file owner RSA key signing/verification of metadata
+4) implement a basic SHELL
 5) implement client-server connectivity
 6) somehow get a working remote server
 7) file updates
