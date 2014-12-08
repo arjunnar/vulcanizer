@@ -13,9 +13,12 @@ print "Starting test..."
 
 
 vc1 = VulcanClient()
-vc1.register("dorayuta")
+if not vc1.register("dorayuta"):
+	vc1.login("dorayuta")
+
 vc2 = VulcanClient()
-vc2.register("arjunnar")
+if not vc2.register("arjunnar"):
+	vc2.login("arjunnar")
 
 print "Made clients."
 

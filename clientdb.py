@@ -47,13 +47,36 @@ class ClientDb():
                                          (filename PRIMARY KEY, encryptedFilename text, permissionsHash text)''')
             self.dbConn.commit()
 
+    '''
+    only to be called after setup of all dbs
+    '''
+    def connectToUserDb(self):
+        self.connectToDb(self.userDataDbLoc)
+
+    def connectToFileDb(self):
+        self.connectToDb(self.filesDbLoc)
+
+    def connectToDb(self, loc):
+        self.dbConn = sqlite3.connect(loc)
+        self.dbCursor = self.dbConn.cursor()
+
+    def userExists(self, user):
+        self.connectToUserDb()
+        values = (user,)
+        cursor = self.dbConn.execute("SELECT count(*) FROM userDataTable where username=?", values)
+        userCount = cursor.fetchone()[0]
+        self.dbConn.commit()
+        return userCount == 1
+
     def addUserDbRecord(self, user, publicKey, privateKey):
+        self.connectToUserDb()
         values = (user, publicKey, privateKey)
         self.dbConn.execute("INSERT INTO userDataTable VALUES (?,?,?)", values)
         self.dbConn.commit()
         
     # returns a 3-tuple of (user, publicKey, privateKey)
     def getUserDbRecord(self, user):
+        self.connectToUserDb()
         cursor = self.dbConn.execute("SELECT * FROM userDataTable where username = " + "'" + user + "'")
         username = user
         privateKey = None
@@ -67,11 +90,13 @@ class ClientDb():
         return (username, publicKey, privateKey)
 
     def addFileRecord(self, filename, encryptedFilename, permHash):
+        self.connectToFileDb()
         values = (filename, encryptedFilename, permHash)
         self.dbConn.execute("INSERT INTO filesTable VALUES (?,?,?)", values)
         self.dbConn.commit()
 
     def getFileRecord(self, filename):
+        self.connectToFileDb()
         cursor = self.dbConn.execute("SELECT * FROM filesTable where filename = " + "'" + filename + "'")
         
         encryptedFilename = None

@@ -26,8 +26,6 @@ class VulcanClient:
         self.rsaPublicKey = None
         self.rsaPrivateKey = None
         self.rsaKeyBits = 2048
-        self.signPublicKey = None
-        self.signPrivateKey = None
         self.initVectorSize = 16
         self.junkDataSize = 16
         # establish connection with dbs.
@@ -37,15 +35,22 @@ class VulcanClient:
         self.wd = os.getcwd()
         self.db = None
 
+    '''
+    returns boolean indicatign successful registration
+    '''
     def register(self, username):
         if self.username != None:
             raise Exception("Already registered user!")
 
-        self.username = username
-        
-        # initialize databases
-        self.db = clientdb.ClientDb(self.username)
+        # need check for if user account already exists
+        self.db = clientdb.ClientDb(username)
         self.db.setupAllDbs()
+        
+        if self.db.userExists(username):
+            print "User already exists!"
+            return False
+
+        self.username = username
 
         self.metadataHashesMap = {} # Convert this to a cache later
         self.fileKeysMap = {}
@@ -53,7 +58,17 @@ class VulcanClient:
         self.encryptedFilenamesMap = {}
 
         self.rsaPublicKey, self.rsaPrivateKey = clientCrypto.newRSAKeyPair(self.rsaKeyBits)
-        self.signPublicKey, self.signPrivateKey = clientCrypto.newRSAKeyPair(self.rsaKeyBits)
+        self.db.addUserDbRecord(self.username, self.rsaPublicKey, self.rsaPrivateKey)
+        return True
+
+    def login(self, username):
+        self.username, self.rsaPublicKey, self.rsaPrivateKey = self.db.getUserDbRecord(username)
+
+        # Convert this to a cache later
+        self.metadataHashesMap = {} 
+        self.fileKeysMap = {}
+        self.sharedFilenamesMap = {}
+        self.encryptedFilenamesMap = {}
 
     def getJunkData(self):
         return Random.new().read(self.junkDataSize)
@@ -68,9 +83,12 @@ class VulcanClient:
         fileEncryptionKey = clientCrypto.newAESEncryptionKey()
         self.fileKeysMap[filename] = fileEncryptionKey
 
+        # get RSA info
         fileRSAKey = clientCrypto.newRSAKey(self.rsaKeyBits)
         fileWritePublicKey, fileWritePrivateKey = clientCrypto.newRSAKeyPair(self.rsaKeyBits, fileRSAKey)
         clientFile.metadata.setFileWritePublicKey(fileWritePublicKey)
+
+        # sign contents
         signFile = clientCrypto.rsaSign(contents, fileRSAKey)
         clientFile.setWriteSignature(signFile)
 
@@ -269,13 +287,9 @@ class VulcanClient:
     def hasWritePermission(self, fileWritePublicKey, contentsHash, signature):
         return fileWritePublicKey.verify(contentsHash, signature)
 
-
     def renameFile(self, filename, newFilename):
         encryptFilename = encryptFilename(fileName)
         newEncryptFilename = encryptFilename(newFilename)
-
-        # call to server to rename
-        # return response-type thing
 
     def encryptFilename(filename):
         encryptedFilename = ""
