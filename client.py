@@ -19,7 +19,7 @@ class VulcanClient:
     def __init__(self):
         self.username = None
 	   # maps unencrypted filenames to hash of file contents
-        self.fileHashesMap = None
+        self.metadataHashesMap = None
         self.fileKeysMap = None
         # map of (shared) filename to encrypted filename 
         self.sharedFilenamesMap = None
@@ -66,7 +66,7 @@ class VulcanClient:
             dbPath = self.userDir + globalScope.dbDirectoryLoc
             os.mkdir(dbPath)
 
-        self.fileHashesMap = {} # Convert this to a cache later
+        self.metadataHashesMap = {} # Convert this to a cache later
         self.fileKeysMap = {}
         self.sharedFilenamesMap = {}
         self.encryptedFilenamesMap = {}
@@ -80,16 +80,10 @@ class VulcanClient:
         privateKey = newKey.exportKey("PEM")
         return (publicKey, privateKey)
 
-    def newFileWriteKeyPair(self):
-        newKey = self.newRSAKey(768)
-        publicKey = newKey.publickey().exportKey("PEM")
-        privateKey = newKey.exportKey("PEM")
-        return (publicKey, privateKey)
-
     def newRSAKey(self, rsaKeyBits):
         return RSA.generate(self.rsaKeyBits)
 
-    def newFileEncryptionKey(self):
+    def newAESEncryptionKey(self):
         # Random.getrandbits(16)
         return Random.new().read(AES.block_size)
 
@@ -97,31 +91,34 @@ class VulcanClient:
         return Random.new().read(self.initVectorSize)
 
     def addFile(self, clientFile, userPermissions):
-        self.addFileHash(clientFile)
+        self.addMetadataHash(clientFile)
         
         filename = clientFile.name
-
         contents = clientFile.contents
-        # encrypt file
-        fileEncryptionKey = self.newFileEncryptionKey()
+
+        # encrypt filename
+        fileEncryptionKey = self.newAESEncryptionKey()
         self.fileKeysMap[filename] = fileEncryptionKey
 
-        # generate another AES key for metadata access
-        metadataAccessKey = self.newFileEncryptionKey()
-        accessKeyIV = self.newInitVector()
-        clientFile.setAccessKey(accessKeyIV + metadataAccessKey)
+        fileWritePublicKey, fileWritePrivateKey = self.newRSAKeyPair()
+        clientFile.metadata.setFileWritePublicKey(fileWritePublicKey)
 
-        fileSignPublicKey, fileSignPrivateKey = self.newFileWriteKeyPair()
-        clientFile.metadata.setFileWriteKey(fileSignPublicKey)
+        # generate another AES key to encrypt the FileWriteKey
+        fileWriteEncryptionKey = self.newAESEncryptionKey()
+        fileWriteEncryptionIV = self.newInitVector()
 
-        permissionsMap = self.generatePermissionsMap(fileEncryptionKey, fileSignPrivateKey, accessKeyIV, metadataAccessKey, userPermissions)
+        # encrypt the FileWriteKey
+        cipher = AES.new(fileWriteEncryptionKey, AES.MODE_CFB, fileWriteEncryptionIV)
+        fileWriteAccessKey = cipher.encrypt(fileWritePrivateKey)
+        clientFile.metadata.setFileWriteAccessKey(fileWriteAccessKey)
 
-        clientFile.metadata.setPermissionsMap(permissionsMap)
+        permissionsMap = self.generatePermissionsMap(fileEncryptionKey, fileWriteEncryptionKey, fileWriteEncryptionIV, userPermissions)
 
-        # use new initVector
+        clientFile.setPermissionsMap(permissionsMap)
+
+        # encrypt filename and file contents
         initVector = self.newInitVector()
         cipher = AES.new(fileEncryptionKey, AES.MODE_CFB, initVector)
-
         encryptedFilename = cipher.encrypt(clientFile.name)
         encryptedFileContents = initVector + cipher.encrypt(clientFile.contents)
         pickledMetadata = pickle.dumps(clientFile.metadata)
@@ -140,7 +137,7 @@ class VulcanClient:
         self.dbCursor.execute("INSERT INTO fileKeys VALUES (?,?,?)", values)
         self.dbConn.commit()
 
-    def generatePermissionsMap(self, fileEncryptionKey,fileSignPrivateKey, accessKeyIV, accessKey, userPermissions):
+    def generatePermissionsMap(self, fileEncryptionKey, fileWriteEncryptionKey, fileWriteEncryptionIV, userPermissions):
         permissionsMap = {}
 
         for username in userPermissions:
@@ -154,20 +151,17 @@ class VulcanClient:
                 readKey = self.encryptReadKey(userPublicKey, fileEncryptionKey)
             
             if write:        
-                # use new initVector? No need because thing to encrypt is good size?
-                cipher = AES.new(accessKey, AES.MODE_CFB, accessKeyIV)
                 # if user has write but not read, userPublicKey will cause problems.
-                middle = cipher.encrypt(fileSignPrivateKey)
-                writeKey = self.encryptWriteKey(userPublicKey, middle)
+                writeKey = self.encryptWriteKey(userPublicKey, fileWriteEncryptionKey, fileWriteEncryptionIV)
 
             permissionsMap[username] = (readKey, writeKey)
 
         return permissionsMap
 
-    def addFileHash(self, clientFile):
+    def addMetadataHash(self, clientFile):
         filename = clientFile.name
-        contentsHash = hashlib.sha1(clientFile.contents)
-        self.fileHashesMap[filename] = contentsHash
+        metadataHash = hashlib.sha1(pickle.dumps(clientFile.metadata))
+        self.metadataHashesMap[filename] = metadataHash
 
     def getSharedFile(self, filename, encryptedFilename = None):
         # use pervious encryptedFilename
@@ -178,6 +172,7 @@ class VulcanClient:
             encryptedFilename = self.sharedFilenamesMap[fileName]
 
         else:
+            # remember encryptedFilename
             self.sharedFilenamesMap[filename] = encryptedFilename
 
         # call to server to get file contents
@@ -189,9 +184,11 @@ class VulcanClient:
 
         if readKey == None:
             raise Exception("You don't have permission to access this file.")
+
         if writeKey == None:
             print "You don't have permission to edit this file."
-
+        else:
+            print "You have edit access to this file."
         # unencrypt file contents
         initVector = encryptedFileContents[:self.initVectorSize]
         cipher = AES.new(readKey, AES.MODE_CFB, initVector)
@@ -203,38 +200,45 @@ class VulcanClient:
         return sharedFile
 
     def getReadWriteKeys(self, metadata):
-        if metadata.permissionsMap == None:
+        if metadata.permissionsMap == None or self.username not in metadata.permissionsMap:
             return (None, None)
         readKey, writeKey = metadata.permissionsMap[self.username]
         if readKey != None:
             readKey = self.decryptReadKey(readKey)
         if writeKey != None:
-            writeKey = self.decryptWriteKey(writeKey, metadata.accessKey)
+            writeKey = self.decryptWriteKey(writeKey, metadata.fileWriteAccessKey)
         return (readKey, writeKey)
 
     def encryptReadKey(self, userPublicKey, encryptionKey):
-        rsakey = RSA.importKey(userPublicKey)
+        return self.rsaEncryptKey(userPublicKey, encryptionKey)
+
+    def encryptWriteKey(self, userPublicKey, fileWriteEncryptionKey, fileWriteEncryptionIV):
+        return self.rsaEncryptKey(userPublicKey, fileWriteEncryptionIV + fileWriteEncryptionKey)
+
+    def rsaEncryptKey(self, publicKey, keyToEncrypt):
+        rsakey = RSA.importKey(publicKey)
         rsakey = PKCS1_OAEP.new(rsakey)
-        encryptedKey = rsakey.encrypt(encryptionKey)
+        encryptedKey = rsakey.encrypt(keyToEncrypt)
         return encryptedKey
 
-    def encryptWriteKey(self, userPublicKey, fileSignPrivateKey):
-        return self.encryptReadKey(userPublicKey, fileSignPrivateKey)
+    def rsaDecryptKey(self, keyToDecrypt):
+        rsakey = RSA.importKey(self.rsaPrivateKey)
+        rsakey = PKCS1_OAEP.new(rsakey)
+        decryptedKey = rsakey.decrypt(keyToDecrypt)
+        return decryptedKey
 
     def decryptReadKey(self, readKey):
         # use RSA keys to extract AES file encryption key from readKey
-        rsakey = RSA.importKey(self.rsaPrivateKey)
-        rsakey = PKCS1_OAEP.new(rsakey)
-        decryptedKey = rsakey.decrypt(readKey)
-        return decryptedKey
+        return self.rsaDecryptKey(readKey)
 
-    def decryptWriteKey(self, writeKey, accessKey):
+    def decryptWriteKey(self, writeKey, fileWriteAccessKey):
         # initial result is still AES encrypted.
-        middle = self.decryptWriteKey(writeKey)
-        metadataAccessIV = accessKey[:self.initVectorSize]
-        metadataAccessKey = accessKey[self.initVectorSize:]
-        cipher = AES.new(accessKey, AES.MODE_CFB, accessKeyIV)
-        return cipher.decrypt(middle)
+        middleKey = self.rsaDecryptKey(writeKey)
+        fileWriteEncryptionIV = middleKey[:self.initVectorSize]
+        fileWriteEncryptionKey = middleKey[self.initVectorSize:]
+        cipher = AES.new(fileWriteEncryptionKey, AES.MODE_CFB, fileWriteEncryptionIV)
+        # returns AES decrypted fileWriteAccessKey (which is AES encrypted fileWriteKey)
+        return cipher.decrypt(fileWriteAccessKey)
 
     def getFile(self, filename):
         if filename not in self.fileKeysMap or filename not in self.encryptedFilenamesMap:
@@ -252,21 +256,20 @@ class VulcanClient:
         # unencrypt file contents
         fileContents = cipher.decrypt(encryptedFileContents[self.initVectorSize:])
 
-        if not self.validContents(filename, fileContents):
+        # get unpickle metadata
+        metadata = pickle.loads(pickledMetadata)
+
+        if not self.validMetadata(filename, metadata):
             # raise warning - file may be corrupt.
             pass
 
-        # get unpickle metadata
-        permissionsMap = pickle.loads(pickledMetadata)
+        clientFile = ClientFile.ClientFile(filename, fileContents, metadata)
 
-        clientFile = ClientFile.ClientFile(filename, fileContents, permissionsMap)   
+        return clientFilename
 
-        return clientFile
-
-
-    def validContents(self, filename, contents):
-        contentsHash = hashlib.sha1(contents)
-        previousHash = self.fileHashesMap[filename]
+    def validMetadata(self, filename, metadata):
+        metadataHash = hashlib.sha1(pickle.dumps(metadata))
+        previousHash = self.metadataHashesMap[filename]
         return contentsHash == previousHash
 
     def deleteFile(self, filename):
@@ -287,10 +290,10 @@ class VulcanClient:
         metadata = clientFile.metadata
 
         # need to check for write permission.
-        fileWriteKeyKey = metadata.fileWriteKey
+        fileWritePublicKey = metadata.fileWritePublicKey
         contentsHash = SHA256.new(contents).digest()
 
-        if self.hasWritePermission(fileWriteKey, contentsHash, signature):
+        if self.hasWritePermission(fileWritePublicKey, contentsHash, signature):
             # user has write permissions
             # call to server to update
             # return response-type thing
@@ -299,8 +302,8 @@ class VulcanClient:
 
         # if owner, can also write metadata.
 
-    def hasWritePermission(self, fileWriteKey, contentsHash, signature):
-        return fileWriteKey.verify(contentsHash, signature)
+    def hasWritePermission(self, fileWritePublicKey, contentsHash, signature):
+        return fileWritePublicKey.verify(contentsHash, signature)
 
 
     def renameFile(self, filename, newFilename):
