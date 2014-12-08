@@ -1,4 +1,4 @@
-## client-side interface
+    ## client-side interface
 
 import hashlib
 import Crypto.PublicKey.RSA as RSA
@@ -11,6 +11,7 @@ import globalScope
 from globalScope import MockServer, userPublicKeys
 import sqlite3
 import os
+import clientdb
 
 
 class VulcanClient:
@@ -34,43 +35,24 @@ class VulcanClient:
         self.dbCursor = None
         self.userDir = None
         self.wd = os.getcwd()
-
-    def initDB(self):
-        fileKeysPath = self.userDir + globalScope.dbDirectoryLoc + globalScope.fileKeysDBLoc
-        # will create db file if doesn't exist
-        if not os.path.exists(fileKeysPath):
-            self.dbConn = sqlite3.connect(fileKeysPath)
-            self.dbCursor = self.dbConn.cursor()
-            # Create table
-            self.dbCursor.execute('''CREATE TABLE fileKeys
-                         (filename text, encryptedFilename text, readKey text)''')
-            self.dbConn.commit()
-
-        else:
-            self.dbConn = sqlite3.connect(fileKeysPath)
-            self.dbCursor = self.dbConn.cursor()
-            self.dbCursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
-
+        self.db = None
 
     def register(self, username):
         if self.username != None:
             raise Exception("Already registered user!")
 
         self.username = username
-        # create table directories. chroot?
-        self.userDir = self.wd + "/" + hashlib.sha1(self.username).hexdigest()
-        if not os.path.exists(self.userDir):
-            os.mkdir(self.userDir)
-            dbPath = self.userDir + globalScope.dbDirectoryLoc
-            os.mkdir(dbPath)
+        # initialize databases
+        self.db = clientdb.ClientDb(self.username)
+        self.db.setupAllDbs()
 
         self.metadataHashesMap = {} # Convert this to a cache later
         self.fileKeysMap = {}
         self.sharedFilenamesMap = {}
         self.encryptedFilenamesMap = {}
+
         self.rsaPublicKey, self.rsaPrivateKey = self.newRSAKeyPair()
         self.signPublicKey, self.signPrivateKey = self.newRSAKeyPair()
-        self.initDB()
 
     def newRSAKeyPair(self, rsakey=None):
         if rsakey is None:
@@ -129,20 +111,11 @@ class VulcanClient:
         encryptedFilename = cipher.encrypt(clientFile.name)
         encryptedFileContents = initVector + cipher.encrypt(self.getJunkData() + clientFile.contents)
         pickledMetadata = pickle.dumps(clientFile.metadata)
-
-        ### UPDATE db
-        self.dbAddFile(filename, encryptedFilename, fileEncryptionKey)
         
         self.encryptedFilenamesMap[clientFile.name] = encryptedFilename
 
         # call to server to store file
         MockServer[encryptedFilename] = (encryptedFileContents, signFile, pickledMetadata)
-
-    def dbAddFile(self, filename, encryptedFilename, fileEncryptionKey):
-        ### UPDATE db with filename, encryptedFilename, fileEncryptionKey
-        values = (filename, "b".decode("utf-8"), "c".decode("utf-8"))
-        self.dbCursor.execute("INSERT INTO fileKeys VALUES (?,?,?)", values)
-        self.dbConn.commit()
 
     def generatePermissionsMap(self, fileEncryptionKey, fileWriteEncryptionKey, fileWriteEncryptionIV, userPermissions):
         permissionsMap = {}

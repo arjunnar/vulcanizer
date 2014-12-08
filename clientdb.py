@@ -8,8 +8,16 @@ dbDirectoryName = 'db/'
 class ClientDb():
     def __init__(self, username):
         self.username = username
+        if not os.path.exists(clientDirectoryLoc):
+            os.mkdir(clientDirectoryLoc)
+        userDir = clientDirectoryLoc + username + '/'
+        
+        if not os.path.exists(userDir):
+            os.mkdir(userDir)
         self.dbDirectoryLoc = clientDirectoryLoc + username + '/' + dbDirectoryName
-        os.mkdir(self.dbDirectoryLoc)
+        
+        if not os.path.exists(self.dbDirectoryLoc):
+            os.mkdir(self.dbDirectoryLoc)
 
         self.userDataDbLoc = self.dbDirectoryLoc + 'userDataDb.db'
         self.filesDbLoc = self.dbDirectoryLoc + 'filesDb.db'
