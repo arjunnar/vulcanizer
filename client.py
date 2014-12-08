@@ -52,7 +52,6 @@ class VulcanClient:
             self.dbConn = sqlite3.connect(fileKeysPath)
             self.dbCursor = self.dbConn.cursor()
             self.dbCursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
-            print self.dbCursor.fetchall()
 
 
     def register(self, username):
@@ -173,6 +172,11 @@ class VulcanClient:
         metadataHash = hashlib.sha1(pickle.dumps(clientFile.metadata))
         self.metadataHashesMap[filename] = metadataHash
 
+    def validMetadata(self, filename, metadata):
+        metadataHash = hashlib.sha1(pickle.dumps(metadata))
+        previousHash = self.metadataHashesMap[filename]
+        return contentsHash == previousHash
+
     def getSharedFile(self, filename, encryptedFilename = None):
         # use pervious encryptedFilename
         if encryptedFilename == None:
@@ -283,19 +287,13 @@ class VulcanClient:
 
         # get unpickle metadata
         metadata = pickle.loads(pickledMetadata)
-
+        
         if not self.validMetadata(filename, metadata):
-            # raise warning - file may be corrupt.
-            pass
+            print "invalid metadata"
 
         clientFile = ClientFile.ClientFile(filename, fileContents, metadata)
 
         return clientFile
-
-    def validMetadata(self, filename, metadata):
-        metadataHash = hashlib.sha1(pickle.dumps(metadata))
-        previousHash = self.metadataHashesMap[filename]
-        return contentsHash == previousHash
 
     def deleteFile(self, filename):
         encryptedFilename = encryptedFilenamesMap[filename]
