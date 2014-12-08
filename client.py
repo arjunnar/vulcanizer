@@ -2,15 +2,13 @@
 
 import hashlib
 import Crypto.PublicKey.RSA as RSA
-from Crypto.Cipher import AES
+from Crypto.Cipher import AES, PKCS1_OAEP
 from Crypto import Random
 from Crypto.Hash import SHA256
 import ClientFile
 import pickle
-from Crypto.Cipher import PKCS1_OAEP
 import globalScope
 from globalScope import MockServer, userPublicKeys
-from base64 import *
 import sqlite3
 import os
 

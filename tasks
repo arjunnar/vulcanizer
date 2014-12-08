@@ -2,6 +2,7 @@
 
 1) complete db support
 2) complete other persistence support
+- get local persistent server support
 3) implement file owner RSA key signing/verification of metadata
 4) implement a basic SHELL
 5) implement client-server connectivity
