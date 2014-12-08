@@ -3,6 +3,11 @@ from Crypto import Random
 import Crypto.PublicKey.RSA as RSA
 from Crypto.Cipher import AES, PKCS1_OAEP
 from Crypto.Hash import SHA256
+import hashlib
+
+
+def sha1HexHash(toHash):
+	return hashlib.sha1(toHash).hexdigest()
 
 def newAESEncryptionKey():
     return Random.new().read(AES.block_size)

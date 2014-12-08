@@ -17,23 +17,15 @@ import clientCrypto
 class VulcanClient:
     def __init__(self):
         self.username = None
-	   # maps unencrypted filenames to hash of file contents
-        self.metadataHashesMap = None
-        self.fileKeysMap = None
-        # map of (shared) filename to encrypted filename 
-        self.sharedFilenamesMap = None
-        self.encryptedFilenamesMap = None
         self.rsaPublicKey = None
         self.rsaPrivateKey = None
+        
+        self.db = None
+
+        ### REFERENCE VALUES ###
         self.rsaKeyBits = 2048
         self.initVectorSize = 16
         self.junkDataSize = 16
-        # establish connection with dbs.
-        self.dbConn = None
-        self.dbCursor = None
-        self.userDir = None
-        self.wd = os.getcwd()
-        self.db = None
 
     '''
     returns boolean indicatign successful registration
@@ -52,11 +44,6 @@ class VulcanClient:
 
         self.username = username
 
-        self.metadataHashesMap = {} # Convert this to a cache later
-        self.fileKeysMap = {}
-        self.sharedFilenamesMap = {}
-        self.encryptedFilenamesMap = {}
-
         self.rsaPublicKey, self.rsaPrivateKey = clientCrypto.newRSAKeyPair(self.rsaKeyBits)
         self.db.addUserDbRecord(self.username, self.rsaPublicKey, self.rsaPrivateKey)
         return True
@@ -64,24 +51,24 @@ class VulcanClient:
     def login(self, username):
         self.username, self.rsaPublicKey, self.rsaPrivateKey = self.db.getUserDbRecord(username)
 
-        # Convert this to a cache later
-        self.metadataHashesMap = {} 
-        self.fileKeysMap = {}
-        self.sharedFilenamesMap = {}
-        self.encryptedFilenamesMap = {}
-
+    '''
+    method to generate junk junkDataSize
+    '''
     def getJunkData(self):
         return Random.new().read(self.junkDataSize)
 
     def addFile(self, clientFile, userPermissions):
-        self.addMetadataHash(clientFile)
-        
         filename = clientFile.name
         contents = clientFile.contents
+        metadata = clientFile.metadata
+
+        if self.db.fileExists(filename):
+            raise Exception("file already exists!")
+
+        metadataHash = self.getMetadataHash(metadata)
 
         # encrypt filename
         fileEncryptionKey = clientCrypto.newAESEncryptionKey()
-        self.fileKeysMap[filename] = fileEncryptionKey
 
         # get RSA info
         fileRSAKey = clientCrypto.newRSAKey(self.rsaKeyBits)
@@ -110,11 +97,12 @@ class VulcanClient:
         cipher = AES.new(fileEncryptionKey, AES.MODE_CFB, initVector)
         encryptedFilename = cipher.encrypt(clientFile.name)
 
+        # update owner file hash
+        self.db.addFileRecord(filename, fileEncryptionKey, encryptedFilename, metadataHash)
+
         # junk the beginning of contents
         encryptedFileContents = initVector + cipher.encrypt(self.getJunkData() + clientFile.contents)
         pickledMetadata = pickle.dumps(clientFile.metadata)
-        
-        self.encryptedFilenamesMap[clientFile.name] = encryptedFilename
 
         # call to server to store file
         MockServer[encryptedFilename] = (encryptedFileContents, signFile, pickledMetadata)
@@ -132,7 +120,7 @@ class VulcanClient:
                 userPublicKey = userPublicKeys[username]
                 readKey = self.encryptReadKey(userPublicKey, fileEncryptionKey)
             
-            if write:        
+            if write:
                 # if user has write but not read, userPublicKey will cause problems.
                 writeKey = self.encryptWriteKey(userPublicKey, fileWriteEncryptionKey, fileWriteEncryptionIV)
 
@@ -140,27 +128,27 @@ class VulcanClient:
 
         return permissionsMap
 
-    def addMetadataHash(self, clientFile):
-        filename = clientFile.name
-        metadataHash = hashlib.sha1(pickle.dumps(clientFile.metadata))
-        self.metadataHashesMap[filename] = metadataHash
+    def getEncryptedFilename(self, filename):
+        return self.db.getFileRecord(filename)[2]
+
+    def getMetadataHash(self, metadata):
+        return clientCrypto.sha1HexHash(pickle.dumps(metadata))
 
     def validMetadata(self, filename, metadata):
-        metadataHash = hashlib.sha1(pickle.dumps(metadata))
-        previousHash = self.metadataHashesMap[filename]
+        metadataHash = clientCrypto.sha1HexHash(pickle.dumps(metadata))
+        encryptedFilename, encryptedContents, previousHash = self.db.getFileRecord(filename)
         return contentsHash == previousHash
 
     def getSharedFile(self, filename, encryptedFilename = None):
         # use pervious encryptedFilename
         if encryptedFilename == None:
-            if filename not in self.sharedFilenamesMap:
+            if not self.db.sharedFileExists(filename):
                 raise Exception("File not shared with you!")
-            
-            encryptedFilename = self.sharedFilenamesMap[fileName]
+
+            encryptedFilename = self.db.getSharedEncryptedFilename(filename)
 
         else:
-            # remember encryptedFilename
-            self.sharedFilenamesMap[filename] = encryptedFilename
+            self.db.updateSharedEncryptedFilename(filename, encryptedFilename)
 
         # call to server to get file contents
         encryptedFileContents, signFile, pickledMetadata = MockServer[encryptedFilename]
@@ -227,11 +215,10 @@ class VulcanClient:
         return cipher.decrypt(fileWriteAccessKey)
 
     def getFile(self, filename):
-        if filename not in self.fileKeysMap or filename not in self.encryptedFilenamesMap:
+        if not self.db.fileExists(filename):
             raise Exception("File not owned, possibly shared.")
 
-        fileEncryptionKey = self.fileKeysMap[filename]
-        encryptedFilename = self.encryptedFilenamesMap[filename]
+        filename, fileEncryptionKey, encryptedFilename, metadataHash = self.db.getFileRecord(filename)
 
         # call to server to get file contents
         encryptedFileContents, pickledMetadata = MockServer[encryptedFilename]
@@ -253,11 +240,10 @@ class VulcanClient:
         return clientFile
 
     def deleteFile(self, filename):
-        encryptedFilename = encryptedFilenamesMap[filename]
-        del self.fileHashesMap[fileName]
         # call to server to delete for encryptedFileName
         # return response-type thing
         del MockServer[encryptedFilename]
+        self.db.deleteFileRecord(filename)
 
     '''
     assume that filename has not changed.

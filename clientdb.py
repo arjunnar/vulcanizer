@@ -21,6 +21,7 @@ class ClientDb():
 
         self.userDataDbLoc = self.dbDirectoryLoc + 'userDataDb.db'
         self.filesDbLoc = self.dbDirectoryLoc + 'filesDb.db'
+        self.sharedFilesDbLoc = self.dbDirectoryLoc + 'sharedFilesDb.db'
         self.dbConn = None
         self.dbCursor = None
 
@@ -44,7 +45,18 @@ class ClientDb():
 
             # Create single table within user data db
             self.dbCursor.execute('''CREATE TABLE filesTable
-                                         (filename PRIMARY KEY, encryptedFilename text, permissionsHash text)''')
+                                         (filename PRIMARY KEY, fileEncryptionKey text, encryptedFilename text, metadataHash text)''')
+            self.dbConn.commit()
+
+
+        # Create sharedFilesDb 
+        if not os.path.exists(self.sharedFilesDbLoc):
+            self.dbConn = sqlite3.connect(self.sharedFilesDbLoc)
+            self.dbCursor = self.dbConn.cursor()
+
+            # Create single table within user data db
+            self.dbCursor.execute('''CREATE TABLE sharedFilesTable
+                                         (filename PRIMARY KEY, encryptedFilename text)''')
             self.dbConn.commit()
 
     '''
@@ -53,11 +65,15 @@ class ClientDb():
     def connectToUserDb(self):
         self.connectToDb(self.userDataDbLoc)
 
-    def connectToFileDb(self):
+    def connectToFilesDb(self):
         self.connectToDb(self.filesDbLoc)
+
+    def connectToSharedFilesDb(self):
+        self.connectToDb(self.sharedFilesDbLoc)
 
     def connectToDb(self, loc):
         self.dbConn = sqlite3.connect(loc)
+        self.dbConn.text_factory = str
         self.dbCursor = self.dbConn.cursor()
 
     def userExists(self, user):
@@ -89,28 +105,109 @@ class ClientDb():
 
         return (username, publicKey, privateKey)
 
-    def addFileRecord(self, filename, encryptedFilename, permHash):
-        self.connectToFileDb()
-        values = (filename, encryptedFilename, permHash)
-        self.dbConn.execute("INSERT INTO filesTable VALUES (?,?,?)", values)
+    def fileExists(self, filename):
+        self.connectToFilesDb()
+        values = (filename,)
+        cursor = self.dbConn.execute("SELECT count(*) FROM filesTable where filename=?", values)
+        fileCount = cursor.fetchone()[0]
+        self.dbConn.commit()
+        return fileCount == 1
+
+    def addFileRecord(self, filename, fileEncryptionKey, encryptedFilename, metadataHash):
+        self.connectToFilesDb()
+        self.dbConn.text_factory = str
+        values = (filename, fileEncryptionKey, encryptedFilename, metadataHash)
+        self.dbConn.execute("INSERT INTO filesTable VALUES (?,?,?,?)", values)
+        self.dbConn.commit()
+
+    def deleteFileRecord(self, filename):
+        self.connectToFilesDb()
+        values = (filename,)
+        self.dbConn.execute("DELETE FROM filesTable WHERE filename=?", values)
+        self.dbConn.commit()
+
+    def updateFileRecord(self, filename, fileEncryptionKey, encryptedFilename, metadataHash):
+        self.connectToFilesDb()
+        filename, prevEncryptionKey, prevEncryptedFilename, prevMetadataHash = self.getFileRecord(filename)
+   
+        if fileEncryptionKey == None:
+            fileEncryptionKey = prevEncryptionKey
+        if encryptedFilename == None:
+            encryptedFilename = prevEncryptedFilename
+        if metadataHash == None:
+            metadataHash = prevMetadataHash
+
+        values = (fileEncryptionKey, encryptedFilename, metadataHash, filename)
+        self.dbConn.execute("UPDATE filesTable SET fileEncryptionKey=?, encryptedFilename=?, metadataHash=? WHERE filename=?", values)
         self.dbConn.commit()
 
     def getFileRecord(self, filename):
-        self.connectToFileDb()
+        self.connectToFilesDb()
         cursor = self.dbConn.execute("SELECT * FROM filesTable where filename = " + "'" + filename + "'")
         
+        fileEncryptionKey = None
         encryptedFilename = None
-        permHash = None
+        metadataHash = None
+
+        for row in cursor:
+            fileEncryptionKey = row[1]
+            encryptedFilename = row[2]
+            metadataHash = row[3]
+        
+        return (filename, fileEncryptionKey, encryptedFilename, metadataHash)        
+
+    def sharedFileExists(self, filename):
+        self.connectToSharedFilesDb()
+        values = (filename,)
+        cursor = self.dbConn.execute("SELECT count(*) FROM sharedFilesTable where filename=?", values)
+        sharedFileCount = cursor.fetchone()[0]
+        self.dbConn.commit()
+        return sharedFileCount == 1
+
+    def addSharedFileRecord(self, filename, encryptedFilename):
+        self.connectToSharedFilesDb()
+        values = (filename, encryptedFilename)
+        self.dbConn.execute("INSERT INTO sharedFilesTable VALUES (?,?)", values)
+        self.dbConn.commit()
+
+    def getSharedFileRecord(self, filename):
+        self.connectToFilesDb()
+        cursor = self.dbConn.execute("SELECT * FROM sharedFilesTable where filename = " + "'" + filename + "'")
+        
+        encryptedFilename = None
 
         for row in cursor:
             encryptedFilename = row[1]
-            permHash = row[2]
         
-        return (filename, encryptedFilename, permHash)
-        
-        
+        return (filename, encryptedFilename)
 
+    def getSharedEncryptedFilename(self, filename):
+        filename, encryptedFilename = self.getSharedFileRecord(filename)
+        return encryptedFilename
 
+    def deleteSharedFileRecord(self, filename):
+        self.connectToFilesDb()
+        values = (filename,)
+        self.dbConn.execute("DELETE FROM sharedFilesTable WHERE filename=?", values)
+        self.dbConn.commit()
+
+    def updateSharedEncryptedFilename(self, filename, encryptedFilename):
+        self.updateSharedFileRecord(filename, encryptedFilename)
+
+    '''
+    method to update encryptedFilename of shared file.
+    '''
+    def updateSharedFileRecord(self, filename, encryptedFilename):
+        self.connectToFilesDb()
+        if not self.sharedFileExists(filename):
+            self.addSharedFileRecord(filename, encryptedFilename)
+
+        else:    
+            prevEncryptedFilename = self.getSharedEncryptedFilename(filename)
+            if prevEncryptedFilename != encryptedFilename:
+                values = (encryptedFilename, filename)
+                self.dbConn.execute("UPDATE sharedFilesTable SET encryptedFilename=? WHERE filename=?", values)
+                self.dbConn.commit()
     
             
             
