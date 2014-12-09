@@ -107,12 +107,10 @@ class VulcanClient:
         # junk the beginning of contents
 
         encryptedFileContents = initVector + cipher.encrypt(self.getJunkData() + clientFile.contents)
-        print 'contents before encryption: ' + clientFile.contents
         pickledMetadata = pickle.dumps(clientFile.metadata)
         # call to server to store file
         tupleToStore = (encryptedFileContents, signFile, pickledMetadata)
         pickledTupleToStore = pickle.dumps(tupleToStore)
-        print 'encrypted filename: ' + encryptedFilename
         self.filestore.addFile(EncryptedFile(encryptedFilename, pickledTupleToStore))
 
     def generatePermissionsMap(self, fileEncryptionKey, fileWriteEncryptionKey, fileWriteEncryptionIV, userPermissions):
@@ -257,12 +255,6 @@ class VulcanClient:
 
         return clientFile
 
-    def deleteFile(self, filename):
-        # call to server to delete for encryptedFileName
-        # return response-type thing
-        del MockServer[encryptedFilename]
-        self.db.deleteFileRecord(filename)
-
     '''
     assume that filename has not changed.
     '''
@@ -298,15 +290,17 @@ class VulcanClient:
                 newEncryptedFileContents = initVector + cipher.encrypt(self.getJunkData() + contents)
 
         elif self.isSharedFile(filename):
+            print "shared!!!!!!!!!!!"
             filename, encryptedFilename, fileEncryptionKey, fileWritePrivateKey = self.db.getSharedFileRecord(filename)
             # call to server to get file contents
             pickledTuple = self.filestore.getFile(encryptedFilename).encryptedContents
             unpickledTuple = pickle.loads(pickledTuple)
             prevEncryptedFileContents, prevSignFile, prevPickledMetadata = unpickledTuple
-            
+
             initVector = prevEncryptedFileContents[:self.initVectorSize]
             cipher = AES.new(fileEncryptionKey, AES.MODE_CFB, initVector)
             
+            print "contents: " + contents
             # junk the beginning of contents
             newEncryptedFileContents = initVector + cipher.encrypt(self.getJunkData() + contents)
             metadata = pickle.loads(prevPickledMetadata)
@@ -321,7 +315,7 @@ class VulcanClient:
 
         tupleToStore = (newEncryptedFileContents, signFile, prevPickledMetadata)
         pickledTupleToStore = pickle.dumps(tupleToStore)
-        self.filestore.addFile(EncryptedFile(encryptedFilename, pickledTupleToStore))
+        self.filestore.updateFile(encryptedFilename, EncryptedFile(encryptedFilename, pickledTupleToStore))
 
     def hasWritePermission(self, fileWritePublicKey, contents, signature):
         return clientCrypto.rsaVerify(contents, fileWritePublicKey, signature)
@@ -334,6 +328,11 @@ class VulcanClient:
 
     def renameFile(self, filename, newFilename):
         pass
+
+    def deleteFile(self, filename):
+        # call to server to delete for encryptedFileName
+        # return response-type thing
+        self.db.deleteFileRecord(filename)
         
     def getEncryptedFilename(self, filename):
         return self.db.getEncryptedFilename(filename)

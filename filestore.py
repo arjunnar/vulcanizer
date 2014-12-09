@@ -53,8 +53,8 @@ class Filestore():
     def updateFile(self, encryptedFilename, encryptedFile): 
         if not fileExists(encryptedFilename):
             return None
-        deleteFile(encryptedFilename)
-        addFile(encryptedFile)
+        self.deleteFile(encryptedFilename)
+        self.addFile(encryptedFile)
 
     # Does nothing if the file to rename does not exist 
     # or if the new file name is already used 

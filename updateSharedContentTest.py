@@ -40,7 +40,6 @@ print "getting shared file..."
 encryptedTestFilename = vc1.getEncryptedFilename(testFilename)
 getCF = vc2.getSharedFile(testFilename, encryptedTestFilename)
 
-
 updatedFileContents = "This test file has been updated!"
 updatedCF = ClientFile.ClientFile(testFilename, updatedFileContents)
 
