@@ -20,6 +20,9 @@ vc2 = VulcanClient()
 if not vc2.register("arjunnar"):
 	vc2.login("arjunnar")
 
+arjunnarUserPublicKey = vc2.rsaPublicKey
+globalScope.userPublicKeys["arjunnar"] = arjunnarUserPublicKey
+
 print "Made clients."
 
 testFileContents = "TEST FILE CONTENT TO BE UPDATED!"
@@ -45,14 +48,14 @@ updatedCF = ClientFile.ClientFile(testFilename, updatedFileContents)
 newUserPerms = {"arjunnar": (True, False)}
 
 try:
-	vc1.addFile(cf, noUserPerms)
+	vc1.addFile(cf, newUserPerms)
 
 except Exception:
 	print ">>> Trying to add file that exists"
 	print ">>> Nevermind, we'll update the file!"
 
 "Attempting to update file..."
-vc1.updateFile(updatedCF)
+vc1.updateFile(updatedCF, newUserPerms)
 
 try:
 	getUCF = vc2.getFile(testFilename)
