@@ -66,7 +66,6 @@ class VulcanClient:
     def addFile(self, clientFile, userPermissions):
         filename = clientFile.name
         contents = clientFile.contents
-        metadata = clientFile.metadata
 
         if self.db.fileExists(filename):
             raise Exception("file already exists!")
@@ -80,7 +79,7 @@ class VulcanClient:
         clientFile.metadata.setFileWritePublicKey(fileWritePublicKey)
 
         # sign contents
-        signFile = clientCrypto.rsaSign(contents, fileRSAKey)
+        signFile = clientCrypto.rsaSign(contents, fileWritePrivateKey)
         clientFile.setWriteSignature(signFile)
 
         # generate another AES key to encrypt the FileWriteKey
@@ -101,11 +100,10 @@ class VulcanClient:
         cipher = AES.new(fileEncryptionKey, AES.MODE_CFB, initVector)
         encryptedFilename = cipher.encrypt(clientFile.name)
 
-        # hash metadata
-        metadataHash = self.getMetadataHash(metadata)
+        metadataHash = self.getMetadataHash(clientFile.metadata)
 
-        # update owner file hash
-        self.db.addFileRecord(filename, fileEncryptionKey, encryptedFilename, metadataHash)
+        # update owner file records
+        self.db.addFileRecord(filename, fileEncryptionKey, encryptedFilename, fileWritePrivateKey, metadataHash)
 
         # junk the beginning of contents
         encryptedFileContents = initVector + cipher.encrypt(self.getJunkData() + clientFile.contents)
@@ -150,7 +148,7 @@ class VulcanClient:
 
     def validMetadata(self, filename, metadata):
         metadataHash = clientCrypto.sha1HexHash(pickle.dumps(metadata))
-        previousHash = self.db.getFileRecord(filename)[3]
+        previousHash = self.db.getFileRecord(filename)[4]
         return metadataHash == previousHash
 
     def getSharedFile(self, filename, encryptedFilename = None):
@@ -158,7 +156,7 @@ class VulcanClient:
         """
         if encryptedFilename == None:
             if not self.db.sharedFileExists(filename):
-                raise Exception("File not shared with you!")
+                raise Exception("No record of encrypted filename being shared!")
 
             encryptedFilename = self.db.getSharedEncryptedFilename(filename)
 
@@ -184,6 +182,9 @@ class VulcanClient:
             print "You don't have permission to edit this file."
         else:
             print "You have edit access to this file."
+        
+        self.db.updateSharedFileRecord(filename, encryptedFilename, readKey, writeKey)
+
         # unencrypt file contents
         initVector = encryptedFileContents[:self.initVectorSize]
         encryptedFileContents = encryptedFileContents[self.initVectorSize:]
@@ -191,19 +192,16 @@ class VulcanClient:
 
         fileContents = cipher.decrypt(encryptedFileContents)[self.junkDataSize:]
         if not self.validSignature(metadata.fileWritePublicKey, fileContents, signFile):
-            print "invalid signature!"
+            print "Invalid signature! File contents may have been tampered."
 
-        print "valid signature"
+        print "Valid signature. File contents appear to be untampered."
 
         sharedFile = ClientFile.ClientFile(filename, fileContents, metadata)   
 
         return sharedFile
 
     def validSignature(self, publicKey, contents, signature):
-        contentsHash = SHA256.new(contents).digest()
-        rsakey = RSA.importKey(publicKey)
-        # rsakey = PKCS1_OAEP.new(rsakey)
-        return rsakey.verify(contentsHash, signature)
+        return clientCrypto.rsaVerify(contents, publicKey, signature)
 
     def getReadWriteKeys(self, metadata):
         if metadata.permissionsMap == None or self.username not in metadata.permissionsMap:
@@ -238,14 +236,13 @@ class VulcanClient:
         if not self.db.fileExists(filename):
             raise Exception("File not owned, possibly shared.")
 
-        filename, fileEncryptionKey, encryptedFilename, metadataHash = self.db.getFileRecord(filename)
+        filename, fileEncryptionKey, encryptedFilename, fileWritePrivateKey, metadataHash = self.db.getFileRecord(filename)
 
         # call to server to get file contents
-        #encryptedFileContents, sig, pickledMetadata = MockServer[encryptedFilename]
         hashedFilename = clientCrypto.sha1HexHash(encryptedFilename)
         pickledTuple = self.filestore.getFile(hashedFilename).encryptedContents
         unpickledTuple = pickle.loads(pickledTuple)
-        encryptedFileContents, sig, pickledMetadata = unpickledTuple
+        encryptedFileContents, signFile, pickledMetadata = unpickledTuple
         
         initVector = encryptedFileContents[:self.initVectorSize]
         encryptedFileContents = encryptedFileContents[self.initVectorSize:]
@@ -261,6 +258,11 @@ class VulcanClient:
         if not self.validMetadata(filename, metadata):
             print "invalid metadata"
 
+        if not self.validSignature(metadata.fileWritePublicKey, fileContents, signFile):
+            print "Invalid signature! File contents may have been tampered."
+
+        print "Valid signature. File contents appear to be untampered."
+
         clientFile = ClientFile.ClientFile(filename, fileContents, metadata)
 
         return clientFile
@@ -274,40 +276,71 @@ class VulcanClient:
     '''
     assume that filename has not changed.
     '''
-    def updateFile(self, filename, clientFile, signature):
-        self.addFileHash(clientFile)  
-        
+    def updateFile(self, clientFile, userPermissions = None):        
         filename = clientFile.name
         contents = clientFile.contents
-        metadata = clientFile.metadata
-
-        # need to check for write permission.
-        fileWritePublicKey = metadata.fileWritePublicKey
-        contentsHash = SHA256.new(contents).digest()
-
-        if self.hasWritePermission(fileWritePublicKey, contentsHash, signature):
-            # user has write permissions
-            # call to server to update
-            # return response-type thing
-            print "Has Write Permissions!"
-            pass
+        metadata = None
 
         # if owner, also update metadata.
+        if self.isOwner(filename):
+            metadata = clientFile.metadata
+            filename, fileEncryptionKey, encryptedFilename, fileWritePrivateKey, metadataHash = self.db.getFileRecord(filename)
+            
+            # if permissions should change, just re-add file, because we would have to regenerate
+            # AES and RSA keys for the file.
+            # only change metadata if userPermissions changes.
+            if userPermissions is not None:
+                self.db.deleteFileRecord(filename)          
+                self.addFile(clientFile, userPermissions)
+                return
+            
+            else:
+                # call to server to get file contents
+                prevEncryptedFileContents, prevSignFile, prevPickledMetadata = MockServer[encryptedFilename]
+                initVector = prevEncryptedFileContents[:self.initVectorSize]
+                cipher = AES.new(fileEncryptionKey, AES.MODE_CFB, initVector)
 
-        # if owner, can also write metadata.
+                signFile = clientCrypto.rsaSign(contents, fileWritePrivateKey)
+                print "contents to newly upload: " + contents
+                # junk the beginning of contents
+                newEncryptedFileContents = initVector + cipher.encrypt(self.getJunkData() + contents)
 
-    def hasWritePermission(self, fileWritePublicKey, contentsHash, signature):
-        return fileWritePublicKey.verify(contentsHash, signature)
+        elif self.isSharedFile(filename):
+            filename, encryptedFilename, fileEncryptionKey, fileWritePrivateKey = self.db.getSharedFileRecord(filename)
+            # call to server to get file contents
+            prevEncryptedFileContents, prevSignFile, prevPickledMetadata = MockServer[encryptedFilename]
+            initVector = prevEncryptedFileContents[:self.initVectorSize]
+            cipher = AES.new(fileEncryptionKey, AES.MODE_CFB, initVector)
+            
+            # junk the beginning of contents
+            newEncryptedFileContents = initVector + cipher.encrypt(self.getJunkData() + contents)
+            
+            metadata = pickle.loads(prevPickledMetadata)
+
+            signFile = clientCrypto.rsaSign(contents, fileWritePrivateKey)
+
+            if not self.hasWritePermission(metadata.fileWritePublicKey, contents, signFile):
+                print "You don't have permission to write!"
+                return
+
+        else:
+            raise Exception("You don't permission to update the file!")
+
+        # call to server to store file
+        MockServer[encryptedFilename] = (newEncryptedFileContents, signFile, prevPickledMetadata)
+
+    def hasWritePermission(self, fileWritePublicKey, contents, signature):
+        return clientCrypto.rsaVerify(contents, fileWritePublicKey, signature)
+
+    def isSharedFile(self, filename):
+        return self.db.sharedFileExists(filename)
+
+    def isOwner(self, filename):
+        return self.db.fileExists(filename)
 
     def renameFile(self, filename, newFilename):
-        encryptFilename = encryptFilename(fileName)
-        newEncryptFilename = encryptFilename(newFilename)
-
-    def encryptFilename(filename):
-        encryptedFilename = ""
-        return encryptedFilename
-
-    def encryptFileContents(contents):
-        encryptedFileContents = ""
-        return  
+        pass
         
+    def getEncryptedFilename(self, filename):
+        return self.db.getEncryptedFilename(filename)
+

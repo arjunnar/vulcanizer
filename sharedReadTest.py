@@ -39,7 +39,7 @@ cf = ClientFile.ClientFile(testFilename, testFileContents)
 vc1.addFile(cf, permissionsMap)
 
 # get encrypted file name
-encryptedFilename = vc1.encryptedFilenamesMap[testFilename]
+encryptedFilename = vc1.getEncryptedFilename(testFilename)
 
 sharedFile = vc2.getSharedFile(testFilename, encryptedFilename)
 

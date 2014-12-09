@@ -45,9 +45,8 @@ class ClientDb():
 
             # Create single table within user data db
             self.dbCursor.execute('''CREATE TABLE filesTable
-                                         (filename PRIMARY KEY, fileEncryptionKey text, encryptedFilename text, metadataHash text)''')
+                                         (filename PRIMARY KEY, fileEncryptionKey text, encryptedFilename text, fileWritePrivateKey text, metadataHash text)''')
             self.dbConn.commit()
-
 
         # Create sharedFilesDb 
         if not os.path.exists(self.sharedFilesDbLoc):
@@ -56,7 +55,8 @@ class ClientDb():
 
             # Create single table within user data db
             self.dbCursor.execute('''CREATE TABLE sharedFilesTable
-                                         (filename PRIMARY KEY, encryptedFilename text)''')
+                                         (filename PRIMARY KEY, encryptedFilename text, fileEncryptionKey text, 
+                                            fileWritePrivateKey text)''')
             self.dbConn.commit()
 
     '''
@@ -113,11 +113,18 @@ class ClientDb():
         self.dbConn.commit()
         return fileCount == 1
 
-    def addFileRecord(self, filename, fileEncryptionKey, encryptedFilename, metadataHash):
+    def getEncryptedFilename(self, filename):
+        self.connectToFilesDb()
+        values = (filename,)
+        cursor = self.dbConn.execute("SELECT encryptedFilename FROM filesTable where filename=?", values)
+        self.dbConn.commit()
+        return cursor.fetchone()[0]
+
+    def addFileRecord(self, filename, fileEncryptionKey, encryptedFilename, fileWritePrivateKey, metadataHash):
         self.connectToFilesDb()
         self.dbConn.text_factory = str
-        values = (filename, fileEncryptionKey, encryptedFilename, metadataHash)
-        self.dbConn.execute("INSERT INTO filesTable VALUES (?,?,?,?)", values)
+        values = (filename, fileEncryptionKey, encryptedFilename, fileWritePrivateKey, metadataHash)
+        self.dbConn.execute("INSERT INTO filesTable VALUES (?,?,?,?,?)", values)
         self.dbConn.commit()
 
     def deleteFileRecord(self, filename):
@@ -126,19 +133,23 @@ class ClientDb():
         self.dbConn.execute("DELETE FROM filesTable WHERE filename=?", values)
         self.dbConn.commit()
 
-    def updateFileRecord(self, filename, fileEncryptionKey, encryptedFilename, metadataHash):
+    def updateFileRecord(self, filename, fileEncryptionKey, encryptedFilename, fileWritePrivateKey, metadataHash):
         self.connectToFilesDb()
-        filename, prevEncryptionKey, prevEncryptedFilename, prevMetadataHash = self.getFileRecord(filename)
+        filename, prevEncryptionKey, prevEncryptedFilename, prevFileWritePrivateKey, prevMetadataHash = self.getFileRecord(filename)
    
         if fileEncryptionKey == None:
             fileEncryptionKey = prevEncryptionKey
         if encryptedFilename == None:
             encryptedFilename = prevEncryptedFilename
+        if fileWritePrivateKey == None:
+            fileWritePrivateKey = prevFileWritePrivateKey
+
         if metadataHash == None:
             metadataHash = prevMetadataHash
 
-        values = (fileEncryptionKey, encryptedFilename, metadataHash, filename)
-        self.dbConn.execute("UPDATE filesTable SET fileEncryptionKey=?, encryptedFilename=?, metadataHash=? WHERE filename=?", values)
+        values = (fileEncryptionKey, encryptedFilename, fileWritePrivateKey, metadataHash, filename)
+        self.dbConn.execute("UPDATE filesTable SET fileEncryptionKey=?, encryptedFilename=?, \
+                                fileWritePrivateKey=?, metadataHash=? WHERE filename=?", values)
         self.dbConn.commit()
 
     def getFileRecord(self, filename):
@@ -152,9 +163,10 @@ class ClientDb():
         for row in cursor:
             fileEncryptionKey = row[1]
             encryptedFilename = row[2]
-            metadataHash = row[3]
+            fileWritePrivateKey = row[3]
+            metadataHash = row[4]
         
-        return (filename, fileEncryptionKey, encryptedFilename, metadataHash)        
+        return (filename, fileEncryptionKey, encryptedFilename, fileWritePrivateKey, metadataHash)            
 
     def sharedFileExists(self, filename):
         self.connectToSharedFilesDb()
@@ -164,22 +176,24 @@ class ClientDb():
         self.dbConn.commit()
         return sharedFileCount == 1
 
-    def addSharedFileRecord(self, filename, encryptedFilename):
+    def addSharedFileRecord(self, filename, encryptedFilename, fileEncryptionKey="", fileWritePrivateKey=""):
         self.connectToSharedFilesDb()
-        values = (filename, encryptedFilename)
-        self.dbConn.execute("INSERT INTO sharedFilesTable VALUES (?,?)", values)
+        values = (filename, encryptedFilename, fileEncryptionKey, fileWritePrivateKey)
+        self.dbConn.execute("INSERT INTO sharedFilesTable VALUES (?,?,?,?)", values)
         self.dbConn.commit()
 
     def getSharedFileRecord(self, filename):
-        self.connectToFilesDb()
+        self.connectToSharedFilesDb()
         cursor = self.dbConn.execute("SELECT * FROM sharedFilesTable where filename = " + "'" + filename + "'")
         
         encryptedFilename = None
 
         for row in cursor:
             encryptedFilename = row[1]
+            fileEncryptionKey = row[2]
+            fileWritePrivateKey = row[3]
         
-        return (filename, encryptedFilename)
+        return (filename, encryptedFilename, fileEncryptionKey, fileWritePrivateKey)
 
     def getSharedEncryptedFilename(self, filename):
         filename, encryptedFilename = self.getSharedFileRecord(filename)
@@ -191,13 +205,10 @@ class ClientDb():
         self.dbConn.execute("DELETE FROM sharedFilesTable WHERE filename=?", values)
         self.dbConn.commit()
 
-    def updateSharedEncryptedFilename(self, filename, encryptedFilename):
-        self.updateSharedFileRecord(filename, encryptedFilename)
-
     '''
     method to update encryptedFilename of shared file.
     '''
-    def updateSharedFileRecord(self, filename, encryptedFilename):
+    def updateSharedEncryptedFilename(self, filename, encryptedFilename):
         self.connectToFilesDb()
         if not self.sharedFileExists(filename):
             self.addSharedFileRecord(filename, encryptedFilename)
@@ -208,6 +219,25 @@ class ClientDb():
                 values = (encryptedFilename, filename)
                 self.dbConn.execute("UPDATE sharedFilesTable SET encryptedFilename=? WHERE filename=?", values)
                 self.dbConn.commit()
+
+    def updateSharedFileRecord(self, filename, encryptedFilename=None, fileEncryptionKey=None, fileWritePrivateKey=None):
+        self.connectToSharedFilesDb()
+        sharedRecordItems = self.getSharedFileRecord(filename)
+        args = locals().items()
+        
+        # use old values if not supplied
+        for i in range(1,len(args)):
+            if args[i] == None:
+                args[i] = sharedRecordItems[i-1]
+
+        if not self.sharedFileExists(filename):
+            print "warning: can't find previous file, adding this one to system."
+            self.addSharedFileRecord(filename, encryptedFilename, fileEncryptionKey, fileWritePrivateKey)
+
+        else:    
+            values = (encryptedFilename, fileEncryptionKey, fileWritePrivateKey, filename)
+            self.dbConn.execute("UPDATE sharedFilesTable SET encryptedFilename=?, fileEncryptionKey=?, fileWritePrivateKey=? WHERE filename=?", values)
+            self.dbConn.commit()
     
             
             
