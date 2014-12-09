@@ -13,8 +13,7 @@ import sqlite3
 import os
 import clientdb
 import clientCrypto
-from filestore import Filestore
-from filestore import EncryptedFile
+from filestore import Filestore, EncryptedFile
 
 class VulcanClient:
     def __init__(self):
@@ -36,7 +35,8 @@ class VulcanClient:
     '''
     def register(self, username):
         if self.username != None:
-            raise Exception("Already registered user!")
+            print "Already registered user!"
+            return False
 
         # need check for if user account already exists
         self.db = clientdb.ClientDb(username)
@@ -47,7 +47,6 @@ class VulcanClient:
             return False
 
         self.username = username
-
         self.rsaPublicKey, self.rsaPrivateKey = clientCrypto.newRSAKeyPair(self.rsaKeyBits)
         self.db.addUserDbRecord(self.username, self.rsaPublicKey, self.rsaPrivateKey)
         return True
@@ -58,7 +57,7 @@ class VulcanClient:
         self.username, self.rsaPublicKey, self.rsaPrivateKey = self.db.getUserDbRecord(username)
 
     '''
-    method to generate junk junkDataSize
+    method to generate junkData
     '''
     def getJunkData(self):
         return Random.new().read(self.junkDataSize)
@@ -98,7 +97,7 @@ class VulcanClient:
         # encrypt filename and file contents
         initVector = clientCrypto.newInitVector(self.initVectorSize)
         cipher = AES.new(fileEncryptionKey, AES.MODE_CFB, initVector)
-        encryptedFilename = cipher.encrypt(clientFile.name)
+        encryptedFilename = clientCrypto.sha1HexHash(cipher.encrypt(clientFile.name))
 
         metadataHash = self.getMetadataHash(clientFile.metadata)
 
@@ -106,18 +105,15 @@ class VulcanClient:
         self.db.addFileRecord(filename, fileEncryptionKey, encryptedFilename, fileWritePrivateKey, metadataHash)
 
         # junk the beginning of contents
+
         encryptedFileContents = initVector + cipher.encrypt(self.getJunkData() + clientFile.contents)
         print 'contents before encryption: ' + clientFile.contents
         pickledMetadata = pickle.dumps(clientFile.metadata)
-
         # call to server to store file
         tupleToStore = (encryptedFileContents, signFile, pickledMetadata)
         pickledTupleToStore = pickle.dumps(tupleToStore)
         print 'encrypted filename: ' + encryptedFilename
-        hashedName = clientCrypto.sha1HexHash(encryptedFilename)
-        print 'after hasing: ' + hashedName
-        MockServer[encryptedFilename] = (encryptedFileContents, signFile, pickledMetadata)
-        self.filestore.addFile(EncryptedFile(hashedName, pickledTupleToStore))
+        self.filestore.addFile(EncryptedFile(encryptedFilename, pickledTupleToStore))
 
     def generatePermissionsMap(self, fileEncryptionKey, fileWriteEncryptionKey, fileWriteEncryptionIV, userPermissions):
         permissionsMap = {}
@@ -152,8 +148,7 @@ class VulcanClient:
         return metadataHash == previousHash
 
     def getSharedFile(self, filename, encryptedFilename = None):
-        # use pervious encryptedFilename
-        """
+        # use previous encryptedFilename
         if encryptedFilename == None:
             if not self.db.sharedFileExists(filename):
                 raise Exception("No record of encrypted filename being shared!")
@@ -162,12 +157,9 @@ class VulcanClient:
 
         else:
             self.db.updateSharedEncryptedFilename(filename, encryptedFilename)
-        """
 
         # call to server to get file contents
-        #encryptedFileContents, signFile, pickledMetadata = MockServer[encryptedFilename]
-        hashedFilename = '83f4cb468f7369296e51e1adbe5c5d458b7b4c2f'
-        pickledTuple = self.filestore.getFile(hashedFilename).encryptedContents
+        pickledTuple = self.filestore.getFile(encryptedFilename).encryptedContents
         unpickledTuple = pickle.loads(pickledTuple)
         encryptedFileContents, signFile, pickledMetadata = unpickledTuple
 
@@ -191,6 +183,7 @@ class VulcanClient:
         cipher = AES.new(readKey, AES.MODE_CFB, initVector)
 
         fileContents = cipher.decrypt(encryptedFileContents)[self.junkDataSize:]
+
         if not self.validSignature(metadata.fileWritePublicKey, fileContents, signFile):
             print "Invalid signature! File contents may have been tampered."
 
@@ -239,8 +232,7 @@ class VulcanClient:
         filename, fileEncryptionKey, encryptedFilename, fileWritePrivateKey, metadataHash = self.db.getFileRecord(filename)
 
         # call to server to get file contents
-        hashedFilename = clientCrypto.sha1HexHash(encryptedFilename)
-        pickledTuple = self.filestore.getFile(hashedFilename).encryptedContents
+        pickledTuple = self.filestore.getFile(encryptedFilename).encryptedContents
         unpickledTuple = pickle.loads(pickledTuple)
         encryptedFileContents, signFile, pickledMetadata = unpickledTuple
         
@@ -256,12 +248,10 @@ class VulcanClient:
         metadata = pickle.loads(pickledMetadata)
         
         if not self.validMetadata(filename, metadata):
-            print "invalid metadata"
+            print "WARNING: file metadata may have been tampered."
 
         if not self.validSignature(metadata.fileWritePublicKey, fileContents, signFile):
             print "Invalid signature! File contents may have been tampered."
-
-        print "Valid signature. File contents appear to be untampered."
 
         clientFile = ClientFile.ClientFile(filename, fileContents, metadata)
 
@@ -294,29 +284,32 @@ class VulcanClient:
                 self.addFile(clientFile, userPermissions)
                 return
             
-            else:
+            else:    
                 # call to server to get file contents
-                prevEncryptedFileContents, prevSignFile, prevPickledMetadata = MockServer[encryptedFilename]
+                pickledTuple = self.filestore.getFile(encryptedFilename).encryptedContents
+                unpickledTuple = pickle.loads(pickledTuple)
+                prevEncryptedFileContents, prevSignFile, prevPickledMetadata = unpickledTuple
                 initVector = prevEncryptedFileContents[:self.initVectorSize]
                 cipher = AES.new(fileEncryptionKey, AES.MODE_CFB, initVector)
 
                 signFile = clientCrypto.rsaSign(contents, fileWritePrivateKey)
-                print "contents to newly upload: " + contents
+                print "contents to newly upload: " + fileContentstents
                 # junk the beginning of contents
                 newEncryptedFileContents = initVector + cipher.encrypt(self.getJunkData() + contents)
 
         elif self.isSharedFile(filename):
             filename, encryptedFilename, fileEncryptionKey, fileWritePrivateKey = self.db.getSharedFileRecord(filename)
             # call to server to get file contents
-            prevEncryptedFileContents, prevSignFile, prevPickledMetadata = MockServer[encryptedFilename]
+            pickledTuple = self.filestore.getFile(encryptedFilename).encryptedContents
+            unpickledTuple = pickle.loads(pickledTuple)
+            prevEncryptedFileContents, prevSignFile, prevPickledMetadata = unpickledTuple
+            
             initVector = prevEncryptedFileContents[:self.initVectorSize]
             cipher = AES.new(fileEncryptionKey, AES.MODE_CFB, initVector)
             
             # junk the beginning of contents
             newEncryptedFileContents = initVector + cipher.encrypt(self.getJunkData() + contents)
-            
             metadata = pickle.loads(prevPickledMetadata)
-
             signFile = clientCrypto.rsaSign(contents, fileWritePrivateKey)
 
             if not self.hasWritePermission(metadata.fileWritePublicKey, contents, signFile):
@@ -326,8 +319,9 @@ class VulcanClient:
         else:
             raise Exception("You don't permission to update the file!")
 
-        # call to server to store file
-        MockServer[encryptedFilename] = (newEncryptedFileContents, signFile, prevPickledMetadata)
+        tupleToStore = (newEncryptedFileContents, signFile, prevPickledMetadata)
+        pickledTupleToStore = pickle.dumps(tupleToStore)
+        self.filestore.addFile(EncryptedFile(encryptedFilename, pickledTupleToStore))
 
     def hasWritePermission(self, fileWritePublicKey, contents, signature):
         return clientCrypto.rsaVerify(contents, fileWritePublicKey, signature)
