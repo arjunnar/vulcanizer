@@ -2,6 +2,7 @@
 from Crypto import Random
 import Crypto.PublicKey.RSA as RSA
 from Crypto.Cipher import AES, PKCS1_OAEP
+from Crypto.Signature import PKCS1_v1_5
 from Crypto.Hash import SHA256
 import hashlib
 
@@ -37,6 +38,14 @@ def rsaDecryptKey(privateKey, keyToDecrypt):
     decryptedKey = rsakey.decrypt(keyToDecrypt)
     return decryptedKey
 
-def rsaSign(toSign, rsaKey):
-    toSignHash = SHA256.new(toSign).digest()
-    return rsaKey.sign(toSignHash, '')
+def rsaSign(toSign, rsaPrivateKey):
+	toSignHash = SHA256.new(toSign)
+	rsakey = RSA.importKey(rsaPrivateKey)
+	rsakey = PKCS1_v1_5.new(rsakey)
+	return rsakey.sign(toSignHash)
+
+def rsaVerify(toVerify, rsaPublicKey, signature):
+	toVerifyHash = SHA256.new(toVerify)
+	rsakey = RSA.importKey(rsaPublicKey)
+	rsakey = PKCS1_v1_5.new(rsakey)
+	return rsakey.verify(toVerifyHash, signature)

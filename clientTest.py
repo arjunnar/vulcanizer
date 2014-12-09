@@ -14,7 +14,8 @@ import ClientFile
 print "Starting test..."
 # create new client
 vc = VulcanClient()
-vc.register("dorayuta")
+if not vc.register("dorayuta"):
+	vc.login("dorayuta")
 
 testFileContents = "This is the file contents for a test file."
 testFileName = "testFileName"
