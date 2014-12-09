@@ -1,0 +1,40 @@
+function runTest {
+
+echo "### clearing db..."
+./clearDB.sh
+
+echo "### clientTest.py..."
+python clientTest.py
+echo "### clearing db..."
+./clearDB.sh
+
+echo "### sharedReadTest.py..."
+python sharedReadTest.py
+echo "### clearing db..."
+./clearDB.sh
+
+echo "### sharedWriteTest.py..."
+python sharedWriteTest.py
+echo "### clearing db..."
+./clearDB.sh
+
+echo "### updatePermissionsTest.py..."
+python updatePermissionsTest.py
+echo "### clearing db..."
+./clearDB.sh
+
+echo "### updateSharedContentTest.py..."
+python updateSharedContentTest.py
+echo "### clearing db..."
+./clearDB.sh
+
+}
+
+echo "Do you wish to RUN ALL TESTS?"
+select yn in "Yes" "No"; do
+    case $yn in
+        Yes ) runTest; break;;
+        No ) break;;
+    esac
+done
+
