@@ -28,6 +28,10 @@ python updateSharedContentTest.py
 echo "### clearing db..."
 ./clearDB.sh
 
+echo "### deleteFileTest.py..."
+python deleteFileTest.py
+echo "### clearing db..."
+./clearDB.sh
 }
 
 echo "Do you wish to RUN ALL TESTS?"

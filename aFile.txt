@@ -1,1 +1,0 @@
-Testing if a browser will display the contents of a txt file.

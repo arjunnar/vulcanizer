@@ -30,7 +30,12 @@ class Shell(cmd.Cmd):
         return True
     
     def do_ls(self, line):
-        print "Not Yet Implemented"
+        if not self.loggedIn:
+            print 'Must login or register'
+            return
+            
+        for f in self.clientObj.showFiles():
+            print f
         return
 
     def do_login(self, username):
@@ -95,11 +100,14 @@ class Shell(cmd.Cmd):
             if s == 'DONE':
                 break
             splitS = s.split(',')
-            sharedUser = splitS[0]
-            permission = splitS[1]
+            if len(splitS) != 2:
+                print "Wrong number of args: enter 'username, permission'."
+            else:
+                sharedUser = splitS[0]
+                permission = splitS[1]
 
-            # Will replace existing permission for user
-            permissionsMap[sharedUser] = permission
+                # Will replace existing permission for user
+                permissionsMap[sharedUser] = permission
 
         # Just for debugging 
         print permissionsMap
@@ -131,6 +139,11 @@ class Shell(cmd.Cmd):
             return
 
         # Call client's delete file code
+        if self.clientObj.deleteFile(f):
+            print "Delete was successful."
+            return
+        else:
+            print "Delete was unsuccessful."
 
     def do_download_file(self, f):
         if not self.loggedIn:

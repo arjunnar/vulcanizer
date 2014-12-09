@@ -21,6 +21,7 @@ def getFileFromDisk(encryptedFilename):
 
 # assumes that the file exists 
 def deleteFileOnDisk(encryptedFilename):
+    print "DELETING FILE oN DISK!"
     os.remove(filestoreDirectory + encryptedFilename)
 
 # assumes that the file to rename exists

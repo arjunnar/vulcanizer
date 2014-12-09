@@ -168,6 +168,16 @@ class ClientDb():
         
         return (filename, fileEncryptionKey, encryptedFilename, fileWritePrivateKey, metadataHash)            
 
+    def showFiles(self):
+        self.connectToFilesDb()
+        cursor = self.dbConn.execute("SELECT filename FROM filesTable")
+        showFiles = []
+
+        for row in cursor:
+            showFiles.append(row[0])
+
+        return showFiles
+
     def sharedFileExists(self, filename):
         self.connectToSharedFilesDb()
         values = (filename,)

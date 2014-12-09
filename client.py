@@ -225,7 +225,7 @@ class VulcanClient:
 
     def getFile(self, filename):
         if not self.db.fileExists(filename):
-            raise Exception("File not owned, possibly shared.")
+            raise Exception("File not found.")
 
         filename, fileEncryptionKey, encryptedFilename, fileWritePrivateKey, metadataHash = self.db.getFileRecord(filename)
 
@@ -326,14 +326,23 @@ class VulcanClient:
     def isOwner(self, filename):
         return self.db.fileExists(filename)
 
+    def showFiles(self):
+        return self.db.showFiles()
+
     def renameFile(self, filename, newFilename):
         pass
 
     def deleteFile(self, filename):
         # call to server to delete for encryptedFileName
-        # return response-type thing
-        self.db.deleteFileRecord(filename)
+        if self.isOwner(filename):
+            encryptedFilename = self.getEncryptedFilename(filename)
+            self.db.deleteFileRecord(filename)
+            self.filestore.deleteFile(encryptedFilename)
+            return True
+        else:
+            print "File does not exist, or permission to delete file denied."
+            return False
+
         
     def getEncryptedFilename(self, filename):
         return self.db.getEncryptedFilename(filename)
-

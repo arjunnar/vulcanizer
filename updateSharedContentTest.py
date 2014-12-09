@@ -51,6 +51,9 @@ print "File updated by arjunnar!"
 
 getUCF = vc1.getFile(testFilename)
 
-print "Updated file contents, as seen by dorayuta: " + getUCF.contents
+if getUCF.contents == updatedFileContents:
+	print "PASS"
+else:
+	print "FAIL"
 
 print "End of test."
