@@ -17,7 +17,7 @@ vc = VulcanClient()
 vc.register("dorayuta")
 
 testFileContents = "This is the file contents for a test file."
-testFileName = "testFileName"
+testFileName = "testFileName3"
 cf = ClientFile.ClientFile(testFileName, testFileContents)
 userPermissions = {}
 

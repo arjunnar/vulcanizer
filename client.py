@@ -13,6 +13,8 @@ import sqlite3
 import os
 import clientdb
 import clientCrypto
+from filestore import Filestore
+from filestore import EncryptedFile
 
 class VulcanClient:
     def __init__(self):
@@ -26,6 +28,8 @@ class VulcanClient:
         self.rsaKeyBits = 2048
         self.initVectorSize = 16
         self.junkDataSize = 16
+
+        self.filestore = Filestore()
 
     '''
     returns boolean indicatign successful registration
@@ -49,6 +53,8 @@ class VulcanClient:
         return True
 
     def login(self, username):
+        self.db = clientdb.ClientDb(username)
+        self.db.setupAllDbs()
         self.username, self.rsaPublicKey, self.rsaPrivateKey = self.db.getUserDbRecord(username)
 
     '''
@@ -64,8 +70,6 @@ class VulcanClient:
 
         if self.db.fileExists(filename):
             raise Exception("file already exists!")
-
-        metadataHash = self.getMetadataHash(metadata)
 
         # encrypt filename
         fileEncryptionKey = clientCrypto.newAESEncryptionKey()
@@ -97,15 +101,25 @@ class VulcanClient:
         cipher = AES.new(fileEncryptionKey, AES.MODE_CFB, initVector)
         encryptedFilename = cipher.encrypt(clientFile.name)
 
+        # hash metadata
+        metadataHash = self.getMetadataHash(metadata)
+
         # update owner file hash
         self.db.addFileRecord(filename, fileEncryptionKey, encryptedFilename, metadataHash)
 
         # junk the beginning of contents
         encryptedFileContents = initVector + cipher.encrypt(self.getJunkData() + clientFile.contents)
+        print 'contents before encryption: ' + clientFile.contents
         pickledMetadata = pickle.dumps(clientFile.metadata)
 
         # call to server to store file
+        tupleToStore = (encryptedFileContents, signFile, pickledMetadata)
+        pickledTupleToStore = pickle.dumps(tupleToStore)
+        print 'encrypted filename: ' + encryptedFilename
+        hashedName = clientCrypto.sha1HexHash(encryptedFilename)
+        print 'after hasing: ' + hashedName
         MockServer[encryptedFilename] = (encryptedFileContents, signFile, pickledMetadata)
+        self.filestore.addFile(EncryptedFile(hashedName, pickledTupleToStore))
 
     def generatePermissionsMap(self, fileEncryptionKey, fileWriteEncryptionKey, fileWriteEncryptionIV, userPermissions):
         permissionsMap = {}
@@ -136,11 +150,12 @@ class VulcanClient:
 
     def validMetadata(self, filename, metadata):
         metadataHash = clientCrypto.sha1HexHash(pickle.dumps(metadata))
-        encryptedFilename, encryptedContents, previousHash = self.db.getFileRecord(filename)
-        return contentsHash == previousHash
+        previousHash = self.db.getFileRecord(filename)[3]
+        return metadataHash == previousHash
 
     def getSharedFile(self, filename, encryptedFilename = None):
         # use pervious encryptedFilename
+        """
         if encryptedFilename == None:
             if not self.db.sharedFileExists(filename):
                 raise Exception("File not shared with you!")
@@ -149,9 +164,14 @@ class VulcanClient:
 
         else:
             self.db.updateSharedEncryptedFilename(filename, encryptedFilename)
+        """
 
         # call to server to get file contents
-        encryptedFileContents, signFile, pickledMetadata = MockServer[encryptedFilename]
+        #encryptedFileContents, signFile, pickledMetadata = MockServer[encryptedFilename]
+        hashedFilename = '83f4cb468f7369296e51e1adbe5c5d458b7b4c2f'
+        pickledTuple = self.filestore.getFile(hashedFilename).encryptedContents
+        unpickledTuple = pickle.loads(pickledTuple)
+        encryptedFileContents, signFile, pickledMetadata = unpickledTuple
 
         # unpickle metadata
         metadata = pickle.loads(pickledMetadata)
@@ -221,14 +241,20 @@ class VulcanClient:
         filename, fileEncryptionKey, encryptedFilename, metadataHash = self.db.getFileRecord(filename)
 
         # call to server to get file contents
-        encryptedFileContents, pickledMetadata = MockServer[encryptedFilename]
+        #encryptedFileContents, sig, pickledMetadata = MockServer[encryptedFilename]
+        hashedFilename = clientCrypto.sha1HexHash(encryptedFilename)
+        pickledTuple = self.filestore.getFile(hashedFilename).encryptedContents
+        unpickledTuple = pickle.loads(pickledTuple)
+        encryptedFileContents, sig, pickledMetadata = unpickledTuple
         
         initVector = encryptedFileContents[:self.initVectorSize]
+        encryptedFileContents = encryptedFileContents[self.initVectorSize:]
         cipher = AES.new(fileEncryptionKey, AES.MODE_CFB, initVector)
 
         # unencrypt file contents
         fileContents = cipher.decrypt(encryptedFileContents)[self.junkDataSize:]
-
+        print 'file contents: ' + fileContents
+        
         # get unpickle metadata
         metadata = pickle.loads(pickledMetadata)
         

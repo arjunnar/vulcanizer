@@ -15,7 +15,8 @@ def fileExists(encryptedFilename):
 # returns an instance of EncryptedFile class
 def getFileFromDisk(encryptedFilename):
     f = open(filestoreDirectory + encryptedFilename, 'r') 
-    encryptedContents = f.readlines() 
+    encryptedContents = f.read()
+    f.close()
     return EncryptedFile(encryptedFilename, encryptedContents)
 
 # assumes that the file exists 
@@ -33,24 +34,24 @@ class Filestore():
     # Does nothing if the file already exists 
     def addFile(self, encryptedFile):
         encryptedFilename = encryptedFile.encryptedName 
-        if !fileExists(encryptedFilename):
+        if not fileExists(encryptedFilename):
             writeFileToDisk(encryptedFile)
 
     # Returns None if file does not exist
     def getFile(self, encryptedFilename): 
-        if !fileExists(encryptedFilename):
+        if not fileExists(encryptedFilename):
             return None 
         return getFileFromDisk(encryptedFilename)
 
     # Does nothing if file does not exist 
     def deleteFile(self, encryptedFilename):
-        if !fileExists(encryptedFilename):
+        if not fileExists(encryptedFilename):
             return None
         deleteFileOnDisk(encryptedFilename)
 
     # Does nothing if the file doesn't already exist
     def updateFile(self, encryptedFilename, encryptedFile): 
-        if !fileExists(encryptedFilename):
+        if not fileExists(encryptedFilename):
             return None
         deleteFile(encryptedFilename)
         addFile(encryptedFile)
@@ -58,7 +59,7 @@ class Filestore():
     # Does nothing if the file to rename does not exist 
     # or if the new file name is already used 
     def renameFile(self, encryptedFilename, newEncryptedFilename):
-        if !fileExists(encryptedFilename) or fileExists(newEncryptedFilename):
+        if not fileExists(encryptedFilename) or fileExists(newEncryptedFilename):
             return
         renameFile(encryptedFilename, newEncryptedFilename)
 
