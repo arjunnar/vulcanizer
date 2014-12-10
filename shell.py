@@ -146,6 +146,8 @@ class Shell(cmd.Cmd):
         path = self.userDirectory + f
         fileContents = self.extractFileContents(path)
 
+        # BUG - if user doesn't own the file, just pass along an Empty permissions map
+        
         # Get the permissions for sharing the file
         # should try to change, not redo
         permissionsMap = {}
@@ -196,7 +198,7 @@ class Shell(cmd.Cmd):
             print 'Error: Must specify a file to get from the server'
             return
 
-        # clientFile = self.clientObj.downloadFile(f)
+        #clientFile = self.clientObj.downloadFile(f)
 
         if self.clientObj.isOwner(f):
             clientFile = self.clientObj.getFile(f)

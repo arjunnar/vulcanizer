@@ -289,8 +289,12 @@ class VulcanClient:
                 newEncryptedFileContents = initVector + cipher.encrypt(self.getJunkData() + contents)
 
         elif self.isSharedFile(filename):
-            print "shared!!!!!!!!!!!"
             filename, encryptedFilename, fileEncryptionKey, fileWritePrivateKey = self.db.getSharedFileRecord(filename)
+
+            if fileWritePrivateKey == None:
+                print "You don't have permission to write!"
+                return
+
             # call to server to get file contents
             pickledTuple = self.filestore.getFile(encryptedFilename).encryptedContents
             unpickledTuple = pickle.loads(pickledTuple)
@@ -299,14 +303,18 @@ class VulcanClient:
             initVector = prevEncryptedFileContents[:self.initVectorSize]
             cipher = AES.new(fileEncryptionKey, AES.MODE_CFB, initVector)
             
-            print "contents: " + contents
             # junk the beginning of contents
             newEncryptedFileContents = initVector + cipher.encrypt(self.getJunkData() + contents)
             metadata = pickle.loads(prevPickledMetadata)
-            signFile = clientCrypto.rsaSign(contents, fileWritePrivateKey)
+            
+            try:
+                signFile = clientCrypto.rsaSign(contents, fileWritePrivateKey)
+            except:
+                print "Update of shared file failed."
+                return 
 
             if not self.hasWritePermission(metadata.fileWritePublicKey, contents, signFile):
-                print "You don't have permission to write!"
+                print "You don't have permission to update file!"
                 return
 
         else:
