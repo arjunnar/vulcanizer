@@ -114,11 +114,18 @@ class ClientDb():
         return fileCount == 1
 
     def getEncryptedFilename(self, filename):
-        self.connectToFilesDb()
-        values = (filename,)
-        cursor = self.dbConn.execute("SELECT encryptedFilename FROM filesTable where filename=?", values)
-        self.dbConn.commit()
-        return cursor.fetchone()[0]
+        if self.sharedFileExists(filename):
+            return self.getSharedEncryptedFilename(filename)
+        
+        elif self.fileExists(filename):    
+            self.connectToFilesDb()
+            values = (filename,)
+            cursor = self.dbConn.execute("SELECT encryptedFilename FROM filesTable where filename=?", values)
+            self.dbConn.commit()
+            return cursor.fetchone()[0]
+        
+        else:
+            raise Exception("No such file.")
 
     def addFileRecord(self, filename, fileEncryptionKey, encryptedFilename, fileWritePrivateKey, metadataHash):
         self.connectToFilesDb()
@@ -168,15 +175,27 @@ class ClientDb():
         
         return (filename, fileEncryptionKey, encryptedFilename, fileWritePrivateKey, metadataHash)            
 
+    def showAllFiles(self):
+        allFiles = []
+        allFiles.extend(self.showFiles())
+        allFiles.extend(self.showSharedFiles())
+        return allFiles
+
     def showFiles(self):
         self.connectToFilesDb()
         cursor = self.dbConn.execute("SELECT filename FROM filesTable")
-        showFiles = []
-
+        files = []
         for row in cursor:
-            showFiles.append(row[0])
+            files.append(row[0])
+        return files
 
-        return showFiles
+    def showSharedFiles(self):
+        self.connectToSharedFilesDb()
+        cursor = self.dbConn.execute("SELECT filename FROM sharedFilesTable")
+        sharedFiles = []
+        for row in cursor:
+            sharedFiles.append(row[0])
+        return sharedFiles
 
     def sharedFileExists(self, filename):
         self.connectToSharedFilesDb()
@@ -206,7 +225,7 @@ class ClientDb():
         return (filename, encryptedFilename, fileEncryptionKey, fileWritePrivateKey)
 
     def getSharedEncryptedFilename(self, filename):
-        filename, encryptedFilename = self.getSharedFileRecord(filename)
+        filename, encryptedFilename, fileEncryptionKey, prevFileWritePrivateKey = self.getSharedFileRecord(filename)
         return encryptedFilename
 
     def deleteSharedFileRecord(self, filename):

@@ -116,6 +116,7 @@ class VulcanClient:
     def generatePermissionsMap(self, fileEncryptionKey, fileWriteEncryptionKey, fileWriteEncryptionIV, userPermissions):
         permissionsMap = {}
 
+        print "adding permissions for userPermissions: " + str(userPermissions)
         for username in userPermissions:
             # check read permission r+w tuple, True/False?
             read, write = userPermissions[username]
@@ -149,7 +150,8 @@ class VulcanClient:
         # use previous encryptedFilename
         if encryptedFilename == None:
             if not self.db.sharedFileExists(filename):
-                raise Exception("No record of encrypted filename being shared!")
+                print ("No record of encrypted filename being shared!")
+                return
 
             encryptedFilename = self.db.getSharedEncryptedFilename(filename)
 
@@ -326,8 +328,11 @@ class VulcanClient:
     def isOwner(self, filename):
         return self.db.fileExists(filename)
 
-    def showFiles(self):
-        return self.db.showFiles()
+    def fileExists(self, filename):
+        return self.db.fileExists(filename)
+
+    def showAllFiles(self):
+        return self.db.showAllFiles()
 
     def renameFile(self, filename, newFilename):
         pass
@@ -342,7 +347,13 @@ class VulcanClient:
         else:
             print "File does not exist, or permission to delete file denied."
             return False
-
         
     def getEncryptedFilename(self, filename):
-        return self.db.getEncryptedFilename(filename)
+        try:
+            return self.db.getEncryptedFilename(filename)
+        except Exception:
+            return None
+
+    def publishPublicKey(self):
+        if self.username != None:
+            globalScope.userPublicKeys[self.username] = self.rsaPublicKey

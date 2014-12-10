@@ -20,9 +20,18 @@ class Shell(cmd.Cmd):
     def do_EOF(self, line):
         return True
 
+    def do_share_key(self, line):
+        if not self.loggedIn:
+            print 'Must login or register'
+            return
+        self.clientObj.publishPublicKey()
+        print "shared key"
+        return
+
     def do_status(self, line):
         if self.username:
             print "user: " + self.username
+            self.do_ls(line)
         else:
             print "No user logged in."
 
@@ -33,8 +42,8 @@ class Shell(cmd.Cmd):
         if not self.loggedIn:
             print 'Must login or register'
             return
-            
-        for f in self.clientObj.showFiles():
+
+        for f in self.clientObj.showAllFiles():
             print f
         return
 
@@ -92,6 +101,10 @@ class Shell(cmd.Cmd):
 
         path = self.userDirectory + f
         fileContents = self.extractFileContents(path)
+
+        if self.clientObj.fileExists(f):
+            print "File already exists!"
+            return
         
         # Get the permissions for sharing the file
         permissionsMap = {}
@@ -103,8 +116,8 @@ class Shell(cmd.Cmd):
             if len(splitS) != 2:
                 print "Wrong number of args: enter 'username, permission'."
             else:
-                sharedUser = splitS[0]
-                permission = splitS[1]
+                sharedUser = splitS[0].strip()
+                permission = splitS[1].strip()
 
                 # Will replace existing permission for user
                 permissionsMap[sharedUser] = permission
@@ -112,8 +125,7 @@ class Shell(cmd.Cmd):
         # Just for debugging 
         print permissionsMap
         
-        correctPermsMap = self.processPermsMap(permissionsMap)
-            
+        correctPermsMap = self.processPermsMap(permissionsMap)   
         clientFile = ClientFile(f, fileContents)
         print 'File contents in shell before upload: ' + fileContents
         self.clientObj.addFile(clientFile, correctPermsMap)
@@ -127,7 +139,37 @@ class Shell(cmd.Cmd):
             print 'Error: Must specify a file to update'
             return
 
-        # Call client's update file code
+        if not os.path.isfile(self.userDirectory + f):
+            print 'File to upload does not exist in your EFS directory'
+            return
+
+        path = self.userDirectory + f
+        fileContents = self.extractFileContents(path)
+
+        # Get the permissions for sharing the file
+        # should try to change, not redo
+        permissionsMap = {}
+        while (True): 
+            s = raw_input("Enter userToShareWith,permission. Type DONE when you are finished.\n-->  ")
+            if s == 'DONE':
+                break
+            splitS = s.split(',')
+            if len(splitS) != 2:
+                print "Wrong number of args: enter 'username, permission'."
+            else:
+                sharedUser = splitS[0].strip()
+                permission = splitS[1].strip()
+
+                # Will replace existing permission for user
+                permissionsMap[sharedUser] = permission
+
+        # debugging
+        print permissionsMap
+        correctPermsMap = self.processPermsMap(permissionsMap)
+            
+        clientFile = ClientFile(f, fileContents)
+        print 'File contents in shell before upload: ' + fileContents
+        self.clientObj.updateFile(clientFile, correctPermsMap)        
 
     def do_delete_file(self, f):
         if not self.loggedIn:
@@ -153,11 +195,37 @@ class Shell(cmd.Cmd):
         if f == '':
             print 'Error: Must specify a file to get from the server'
             return
+
+        # f might be eName or regular name?
         #shared = True
         #if (shared):
             #self.clientObj.getSharedFile(f)
         #clientFile = self.clientObj.getFile(f)
-        self.clientObj.getSharedFile(f)
+        if self.clientObj.isOwner(f):
+            clientFile = self.clientObj.getFile(f)
+
+        elif self.clientObj.isSharedFile(f):
+            try:
+                clientFile = self.clientObj.getSharedFile(f)
+            except Exception:
+                print"Permission denied"
+                return
+
+        else:
+            eName = raw_input("To access a shared file, please enter the encrypted filename: ")
+            eName = eName.strip()
+            print eName
+            
+            try:
+                clientFile = self.clientObj.getSharedFile(f, eName)
+            
+            except:
+                print "Permission denied"
+                return
+
+            if clientFile is None:
+                print "file not shared."
+                return
 
         self.writeFileToDisk(clientFile)        
         
@@ -167,7 +235,14 @@ class Shell(cmd.Cmd):
             return
 
         # Call client's rename code
-            
+
+    def do_get_eName(self, f):
+        eName = self.clientObj.getEncryptedFilename(f)
+        if eName == None:
+            print "No such file."
+        else:
+            print eName
+
     """ HELPER METHODS """
     def extractFileContents(self, path):
         f = open(path, 'r')
@@ -186,7 +261,7 @@ class Shell(cmd.Cmd):
 
     def processPermsMap(self, permsMap):
         newPermsMap = {}
-        for user in newPermsMap:
+        for user in permsMap:
             perm = permsMap[user]
             if perm == 'R':
                 newPermsMap[user] = (True, False)
