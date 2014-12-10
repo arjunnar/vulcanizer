@@ -265,7 +265,7 @@ class Shell(cmd.Cmd):
             print 'Error renaming file.'
             return
 
-        print 'Error renaming file.'
+        print 'Successfully renamed file.'
 
     def do_get_eName(self, f):
         eName = self.clientObj.getEncryptedFilename(f)

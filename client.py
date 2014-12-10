@@ -90,7 +90,10 @@ class VulcanClient:
         fileWriteAccessKey = cipher.encrypt(fileWritePrivateKey)
         clientFile.metadata.setFileWriteAccessKey(fileWriteAccessKey)
 
-        permissionsMap = self.generatePermissionsMap(fileEncryptionKey, fileWriteEncryptionKey, fileWriteEncryptionIV, userPermissions)
+        try:
+            permissionsMap = self.generatePermissionsMap(fileEncryptionKey, fileWriteEncryptionKey, fileWriteEncryptionIV, userPermissions)
+        except:
+            raise Exception("Error with getting public key of person to share with")
 
         clientFile.setPermissionsMap(permissionsMap)
 
@@ -118,6 +121,9 @@ class VulcanClient:
 
         # generating permissionsMap from userPermissions
         for username in userPermissions:
+            if username not in userPublicKeys:
+                raise Exception("The user you want to share with has not shared his public key.")
+
             # check read permission r+w tuple, True/False?
             read, write = userPermissions[username]
             readKey = None
