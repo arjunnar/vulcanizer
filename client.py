@@ -156,12 +156,21 @@ class VulcanClient:
             encryptedFilename = self.db.getSharedEncryptedFilename(filename)
 
         # call to server to get file contents
-        pickledTuple = self.filestore.getFile(encryptedFilename).encryptedContents
-        unpickledTuple = pickle.loads(pickledTuple)
-        encryptedFileContents, signFile, pickledMetadata = unpickledTuple
+        encryptedFile = self.filestore.getFile(encryptedFilename)
+        if encryptedFile is None:
+            print "ERROR: cannot retrieve file."
+            return
+        try:
+            pickledTuple = encryptedFile.encryptedContents
+            unpickledTuple = pickle.loads(pickledTuple)
+            encryptedFileContents, signFile, pickledMetadata = unpickledTuple
 
-        # unpickle metadata
-        metadata = pickle.loads(pickledMetadata)
+            # unpickle metadata
+            metadata = pickle.loads(pickledMetadata)
+        except:
+            print "ERROR: unable to retrieve shared file data."
+            return
+
         readKey, writeKey = self.getReadWriteKeys(metadata)
 
         if readKey == None:
@@ -229,10 +238,20 @@ class VulcanClient:
         filename, fileEncryptionKey, encryptedFilename, fileWritePrivateKey, metadataHash = self.db.getFileRecord(filename)
 
         # call to server to get file contents
-        pickledTuple = self.filestore.getFile(encryptedFilename).encryptedContents
-        unpickledTuple = pickle.loads(pickledTuple)
-        encryptedFileContents, signFile, pickledMetadata = unpickledTuple
+        encryptedFile = self.filestore.getFile(encryptedFilename)
         
+        if encryptedFile is None:
+            print "ERROR: cannot retrieve file."
+            return
+
+        try:
+            pickledTuple = encryptedFile.encryptedContents
+            unpickledTuple = pickle.loads(pickledTuple)
+            encryptedFileContents, signFile, pickledMetadata = unpickledTuple
+        except: 
+            print "ERROR: unable to retrieve file data."
+            return
+            
         initVector = encryptedFileContents[:self.initVectorSize]
         encryptedFileContents = encryptedFileContents[self.initVectorSize:]
         cipher = AES.new(fileEncryptionKey, AES.MODE_CFB, initVector)
@@ -378,7 +397,6 @@ class VulcanClient:
         except Exception:
             return None
 
-    def publishPublicKeys(self):
-        keys = self.db.getAllPublicKeys()
-        for username in keys:
-            globalScope.userPublicKeys[username] = keys[username]
+    def publishPublicKey(self):
+        if self.username != None:
+            globalScope.userPublicKeys[self.username] = self.rsaPublicKey

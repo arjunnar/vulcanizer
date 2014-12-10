@@ -20,12 +20,12 @@ class Shell(cmd.Cmd):
     def do_EOF(self, line):
         return True
 
-    def do_share_keys(self, line):
+    def do_share_key(self, line):
         if not self.loggedIn:
             print 'Must login or register'
             return
-        self.clientObj.publishPublicKeys()
-        print "shared all keys"
+        self.clientObj.publishPublicKey()
+        print "shared key"
         return
 
     def do_status(self, line):
@@ -227,6 +227,9 @@ class Shell(cmd.Cmd):
                 print "file not shared."
                 return
 
+        if clientFile is None:
+            print "Unable to retrieve file data."
+            return
         self.writeFileToDisk(clientFile)        
         
     def do_rename_file(self, oldFileName, newFileName):
