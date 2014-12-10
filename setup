@@ -1,0 +1,18 @@
+function registerUsers {
+echo 'register arjun'
+echo 'logout'
+echo 'register felix'
+echo 'logout'
+echo 'register yuta'
+echo 'logout'
+}
+
+echo "Clearing all previous data..."
+./clearDB.sh
+echo "Registering users: arjun, felix, yuta"
+registerUsers | python shell.py
+echo "Users registered. Giving arjun a filed called aFile.txt"
+cd client/arjun
+cat ../../king.txt > aFile.txt
+cd ../..
+
