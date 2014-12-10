@@ -296,7 +296,7 @@ class VulcanClient:
             # AES and RSA keys for the file.
             # only change metadata if userPermissions changes.
             if userPermissions is not None:
-                self.db.deleteFileRecord(filename)          
+                self.deleteFile(filename)
                 self.addFile(clientFile, userPermissions)
                 return
             
@@ -343,7 +343,8 @@ class VulcanClient:
                 return
 
         else:
-            raise Exception("You don't permission to update the file!")
+            print "Error: no such file exists in your EFS!"
+            return
 
         tupleToStore = (newEncryptedFileContents, signFile, prevPickledMetadata)
         pickledTupleToStore = pickle.dumps(tupleToStore)
