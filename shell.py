@@ -4,6 +4,7 @@ import os
 from ast import literal_eval as make_tuple
 from client import VulcanClient
 import subprocess
+from Tkinter import Tk
 
 class Shell(cmd.Cmd):
     
@@ -34,33 +35,76 @@ class Shell(cmd.Cmd):
 
     def do_EOF(self, line):
         return True
-
-    def do_share_key(self, line):
+    def do_delete_file(self, f):
         if not self.loggedIn:
             print 'Must login or register'
             return
-        self.clientObj.publishPublicKey()
-        print "shared key"
-        return
+        
+        if f == '':
+            print 'Error: Must specify a file to delete'
+            return
 
-    def do_status(self, line):
-        if self.username:
-            print "user: " + self.username
-            self.do_ls(line)
+        # Call client's delete file code
+        if self.clientObj.deleteFile(f):
+            print "Delete was successful."
+            return
         else:
-            print "No user logged in."
+            print "Delete was unsuccessful."
+    
+    def do_download_file(self, f):
+        if not self.loggedIn:
+            print 'Must login or register'
+            return
 
+        if f == '':
+            print 'Error: Must specify a file to get from the server'
+            return
+
+        #clientFile = self.clientObj.downloadFile(f)
+
+        if self.clientObj.isOwner(f):
+            clientFile = self.clientObj.getFile(f)
+
+        elif self.clientObj.isSharedFile(f):
+            try:
+                clientFile = self.clientObj.getSharedFile(f)
+            except Exception:
+                print"Permission denied"
+                return
+
+        else:
+            eName = raw_input("To access a shared file, please enter the encrypted filename: ")
+            eName = eName.strip()
+            print eName
+            
+            try:
+                clientFile = self.clientObj.getSharedFile(f, eName)
+            
+            except:
+                print "Permission denied"
+                return
+
+            if clientFile is None:
+                print "file not shared."
+                return
+
+        if clientFile is None:
+            print "Unable to retrieve file data."
+            return
+
+        self.writeFileToDisk(clientFile)        
+    
     def do_exit(self, line):
         return True
-    
-    def do_ls(self, line):
-        if not self.loggedIn:
-            print 'Must login or register'
-            return
 
-        for f in self.clientObj.showAllFiles():
-            print f
-        return
+    def do_get_eName(self, f):
+        # clipboard help
+        eName = self.clientObj.getEncryptedFilename(f)
+        if eName == None:
+            print "No such file."
+        else:
+            self.copyToClipboard(eName)
+            print eName
 
     def do_login(self, username):
         if username == '':
@@ -81,7 +125,6 @@ class Shell(cmd.Cmd):
         self.clientObj = VulcanClient()
         self.clientObj.login(username)
         
-
     def do_logout(self, line):
         if self.username == None:
             print 'No user logged in.'
@@ -89,6 +132,15 @@ class Shell(cmd.Cmd):
         self.username = None
         self.loggedIn = False
         print 'Successfully logged out.'
+        return
+
+    def do_ls(self, line):
+        if not self.loggedIn:
+            print 'Must login or register'
+            return
+
+        for f in self.clientObj.showAllFiles():
+            print f
         return
 
     def do_register(self, username):
@@ -103,6 +155,81 @@ class Shell(cmd.Cmd):
 
         self.clientObj = VulcanClient()
         self.clientObj.register(username)
+
+    def do_rename_file(self, line):
+        self.checkLogin()
+
+        oldFilename, newFilename = line.split()
+
+        if oldFilename == '' or newFilename == '':
+            print 'Error: Usage is rename_file oldname.file newname.file'
+            return
+        
+        # Call client's rename code
+        if not self.clientObj.renameFile(oldFilename, newFilename):
+            print 'Error renaming file.'
+            return
+
+        print 'Successfully renamed file.'
+    
+    def do_share_key(self, line):
+        if not self.loggedIn:
+            print 'Must login or register'
+            return
+        self.clientObj.publishPublicKey()
+        print "shared key"
+        return
+   
+    def do_status(self, line):
+        if self.username:
+            print "user: " + self.username
+            self.do_ls(line)
+        else:
+            print "No user logged in."
+    
+    def do_update_file(self, f):
+        if not self.loggedIn:
+            print 'Must login or register'
+            return
+
+        if f == '':
+            print 'Error: Must specify a file to update'
+            return
+
+        if not os.path.isfile(self.userDirectory + f):
+            print 'File to upload does not exist in your EFS directory'
+            return
+
+        path = self.userDirectory + f
+        fileContents = self.extractFileContents(path)
+
+        # BUG - if user doesn't own the file, just pass along an Empty permissions map
+
+        # Get the permissions for sharing the file
+        # should try to change, not redo
+        owner = self.clientObj.isOwner(f)
+        permissionsMap = {}
+        while (owner): 
+            s = raw_input("Enter userToShareWith,permission. Type DONE when you are finished.\n-->  ")
+            if s == 'DONE':
+                break
+            splitS = s.split(',')
+            if len(splitS) != 2:
+                print "Wrong number of args: enter 'username, permission'."
+            else:
+                sharedUser = splitS[0].strip()
+                permission = splitS[1].strip()
+
+                # Will replace existing permission for user
+                permissionsMap[sharedUser] = permission
+
+        # debugging
+        print permissionsMap
+        correctPermsMap = self.processPermsMap(permissionsMap)
+            
+        clientFile = ClientFile(f, fileContents)
+        print 'File contents in shell before upload: ' + fileContents
+        self.clientObj.updateFile(clientFile, correctPermsMap)        
     
     def do_upload_file(self, f):
         if not self.loggedIn:
@@ -148,132 +275,6 @@ class Shell(cmd.Cmd):
         print 'File contents in shell before upload: ' + fileContents
         self.clientObj.addFile(clientFile, correctPermsMap)
 
-    def do_update_file(self, f):
-        if not self.loggedIn:
-            print 'Must login or register'
-            return
-
-        if f == '':
-            print 'Error: Must specify a file to update'
-            return
-
-        if not os.path.isfile(self.userDirectory + f):
-            print 'File to upload does not exist in your EFS directory'
-            return
-
-        path = self.userDirectory + f
-        fileContents = self.extractFileContents(path)
-
-        # BUG - if user doesn't own the file, just pass along an Empty permissions map
-
-        # Get the permissions for sharing the file
-        # should try to change, not redo
-        owner = self.clientObj.isOwner(f)
-        permissionsMap = {}
-        while (owner): 
-            s = raw_input("Enter userToShareWith,permission. Type DONE when you are finished.\n-->  ")
-            if s == 'DONE':
-                break
-            splitS = s.split(',')
-            if len(splitS) != 2:
-                print "Wrong number of args: enter 'username, permission'."
-            else:
-                sharedUser = splitS[0].strip()
-                permission = splitS[1].strip()
-
-                # Will replace existing permission for user
-                permissionsMap[sharedUser] = permission
-
-        # debugging
-        print permissionsMap
-        correctPermsMap = self.processPermsMap(permissionsMap)
-            
-        clientFile = ClientFile(f, fileContents)
-        print 'File contents in shell before upload: ' + fileContents
-        self.clientObj.updateFile(clientFile, correctPermsMap)        
-
-    def do_delete_file(self, f):
-        if not self.loggedIn:
-            print 'Must login or register'
-            return
-        
-        if f == '':
-            print 'Error: Must specify a file to delete'
-            return
-
-        # Call client's delete file code
-        if self.clientObj.deleteFile(f):
-            print "Delete was successful."
-            return
-        else:
-            print "Delete was unsuccessful."
-
-    def do_download_file(self, f):
-        if not self.loggedIn:
-            print 'Must login or register'
-            return
-
-        if f == '':
-            print 'Error: Must specify a file to get from the server'
-            return
-
-        #clientFile = self.clientObj.downloadFile(f)
-
-        if self.clientObj.isOwner(f):
-            clientFile = self.clientObj.getFile(f)
-
-        elif self.clientObj.isSharedFile(f):
-            try:
-                clientFile = self.clientObj.getSharedFile(f)
-            except Exception:
-                print"Permission denied"
-                return
-
-        else:
-            eName = raw_input("To access a shared file, please enter the encrypted filename: ")
-            eName = eName.strip()
-            print eName
-            
-            try:
-                clientFile = self.clientObj.getSharedFile(f, eName)
-            
-            except:
-                print "Permission denied"
-                return
-
-            if clientFile is None:
-                print "file not shared."
-                return
-
-        if clientFile is None:
-            print "Unable to retrieve file data."
-            return
-
-        self.writeFileToDisk(clientFile)        
-        
-    def do_rename_file(self, line):
-        self.checkLogin()
-
-        oldFilename, newFilename = line.split()
-
-        if oldFilename == '' or newFilename == '':
-            print 'Error: Usage is rename_file oldname.file newname.file'
-            return
-        
-        # Call client's rename code
-        if not self.clientObj.renameFile(oldFilename, newFilename):
-            print 'Error renaming file.'
-            return
-
-        print 'Successfully renamed file.'
-
-    def do_get_eName(self, f):
-        eName = self.clientObj.getEncryptedFilename(f)
-        if eName == None:
-            print "No such file."
-        else:
-            print eName
-
     """ HELPER METHODS """
     def checkLogin(self):
         if not self.loggedIn:
@@ -304,6 +305,13 @@ class Shell(cmd.Cmd):
             elif perm == 'W':
                 newPermsMap[user] = (True, True)
         return newPermsMap
+
+    def copyToClipboard(self, toCopy):
+        tk = Tk()
+        tk.withdraw()
+        tk.clipboard_clear()
+        tk.clipboard_append(toCopy)
+        tk.destroy()
 
 if __name__ == '__main__':
     Shell().cmdloop()
