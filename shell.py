@@ -16,19 +16,23 @@ class Shell(cmd.Cmd):
         self.clientObj = None
     
     """ PUBLIC API """
-    def do_run(self, *args):
-        if not self.loggedIn:
-            print 'Must login or register'
+    # opens a new notepad with given filename
+    def do_open(self, filename):
+        if not self.checkLogin():
             return
         userDir = os.getcwd() + "\\client\\" + self.username + "\\"
-        print userDir
-        bashCommandArgs = args
+        openFileCommand = ['notepad', filename]
         try:
-            process = subprocess.Popen(bashCommandArgs, stdout=subprocess.PIPE, cwd=userDir)
+            process = subprocess.Popen(openFileCommand, stdout=subprocess.PIPE, cwd=userDir)
             output = process.communicate()[0]
         except:
-            print "Error running command :("
+            print "Error opening file."
         return
+
+    def do_edit(self, filename):
+        if not self.checkLogin():
+            return
+        self.do_open(filename)
 
     def do_greet(self, line):
         print "Welcome to our Encrypted File System"
@@ -157,7 +161,8 @@ class Shell(cmd.Cmd):
         self.clientObj.register(username)
 
     def do_rename_file(self, line):
-        self.checkLogin()
+        if not self.checkLogin():
+            return
 
         oldFilename, newFilename = line.split()
 
@@ -277,9 +282,10 @@ class Shell(cmd.Cmd):
 
     """ HELPER METHODS """
     def checkLogin(self):
-        if not self.loggedIn:
-            print 'Must login or register'
-            return
+        if self.loggedIn:
+            return True
+        print 'Must login or register'
+        return False
 
     def extractFileContents(self, path):
         f = open(path, 'r')
