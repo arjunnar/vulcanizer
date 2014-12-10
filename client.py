@@ -378,6 +378,7 @@ class VulcanClient:
         except Exception:
             return None
 
-    def publishPublicKey(self):
-        if self.username != None:
-            globalScope.userPublicKeys[self.username] = self.rsaPublicKey
+    def publishPublicKeys(self):
+        keys = self.db.getAllPublicKeys()
+        for username in keys:
+            globalScope.userPublicKeys[username] = keys[username]

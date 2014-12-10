@@ -76,6 +76,15 @@ class ClientDb():
         self.dbConn.text_factory = str
         self.dbCursor = self.dbConn.cursor()
 
+    def getAllPublicKeys(self):
+        self.connectToUserDb()
+        cursor = self.dbConn.execute("SELECT username, publicKey FROM userDataTable")
+        publicKeys = {}
+        for row in cursor:
+            publicKeys[row[0]] = row[1]
+
+        return publicKeys
+
     def userExists(self, user):
         self.connectToUserDb()
         values = (user,)

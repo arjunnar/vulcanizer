@@ -20,12 +20,12 @@ class Shell(cmd.Cmd):
     def do_EOF(self, line):
         return True
 
-    def do_share_key(self, line):
+    def do_share_keys(self, line):
         if not self.loggedIn:
             print 'Must login or register'
             return
-        self.clientObj.publishPublicKey()
-        print "shared key"
+        self.clientObj.publishPublicKeys()
+        print "shared all keys"
         return
 
     def do_status(self, line):
