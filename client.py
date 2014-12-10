@@ -332,7 +332,26 @@ class VulcanClient:
         return self.db.showAllFiles()
 
     def renameFile(self, filename, newFilename):
-        pass
+        if self.isOwner(filename):
+            '''
+            encryptedFilename = self.db.getEncryptedFilename(filename)
+            pickledTuple = self.filestore.getFile(encryptedFilename).encryptedContents
+            unpickledTuple = pickle.loads(pickledTuple)
+            prevEncryptedFileContents, prevSignFile, prevPickledMetadata = unpickledTuple
+            prevMetadata = pickle.loads(prevPickledMetadata)
+            userPermissions = self.getMetadataPermissions(prevMetadata)
+            newCF = ClientFile.clientFile(newFilename, )
+            self.deleteFile(filename)
+            self.addFile(newCF, userPermissions)
+            '''
+            return True
+
+        else:
+            print "File does not exist, or you do not have permission to rename file."
+            return False
+
+    def getMetadataPermissions(self, metadata):
+        return {}
 
     def deleteFile(self, filename):
         # call to server to delete for encryptedFileName

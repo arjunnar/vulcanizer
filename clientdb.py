@@ -214,9 +214,9 @@ class ClientDb():
     def getSharedFileRecord(self, filename):
         self.connectToSharedFilesDb()
         cursor = self.dbConn.execute("SELECT * FROM sharedFilesTable where filename = " + "'" + filename + "'")
-        
         encryptedFilename = None
-
+        fileEncryptionKey = None
+        fileWritePrivateKey = None
         for row in cursor:
             encryptedFilename = row[1]
             fileEncryptionKey = row[2]
@@ -253,7 +253,7 @@ class ClientDb():
         self.connectToSharedFilesDb()
         sharedRecordItems = self.getSharedFileRecord(filename)
         args = locals().items()
-        
+
         # use old values if not supplied
         for i in range(1,len(args)):
             if args[i] == None:
