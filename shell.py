@@ -230,6 +230,7 @@ class Shell(cmd.Cmd):
         if clientFile is None:
             print "Unable to retrieve file data."
             return
+            
         self.writeFileToDisk(clientFile)        
         
     def do_rename_file(self, oldFileName, newFileName):
