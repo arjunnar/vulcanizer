@@ -3,6 +3,7 @@ from ClientFile import ClientFile
 import os
 from ast import literal_eval as make_tuple
 from client import VulcanClient
+import subprocess
 
 class Shell(cmd.Cmd):
     
@@ -14,6 +15,20 @@ class Shell(cmd.Cmd):
         self.clientObj = None
     
     """ PUBLIC API """
+    def do_run(self, *args):
+        if not self.loggedIn:
+            print 'Must login or register'
+            return
+        userDir = os.getcwd() + "\\client\\" + self.username + "\\"
+        print userDir
+        bashCommandArgs = args
+        try:
+            process = subprocess.Popen(bashCommandArgs, stdout=subprocess.PIPE, cwd=userDir)
+            output = process.communicate()[0]
+        except:
+            print "Error running command :("
+        return
+
     def do_greet(self, line):
         print "Welcome to our Encrypted File System"
 
@@ -112,7 +127,7 @@ class Shell(cmd.Cmd):
         # Get the permissions for sharing the file
         permissionsMap = {}
         while (True): 
-            s = raw_input("Enter userToShareWith,permission. Type DONE when you are finished.\n-->  ")
+            s = raw_input("Enter userToShareWith, permission. Type DONE when you are finished.\n-->  ")
             if s == 'DONE':
                 break
             splitS = s.split(',')

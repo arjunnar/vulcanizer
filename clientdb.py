@@ -10,6 +10,7 @@ class ClientDb():
         self.username = username
         if not os.path.exists(clientDirectoryLoc):
             os.mkdir(clientDirectoryLoc)
+        
         userDir = clientDirectoryLoc + username + '/'
         
         if not os.path.exists(userDir):
