@@ -116,7 +116,7 @@ class VulcanClient:
     def generatePermissionsMap(self, fileEncryptionKey, fileWriteEncryptionKey, fileWriteEncryptionIV, userPermissions):
         permissionsMap = {}
 
-        print "adding permissions for userPermissions: " + str(userPermissions)
+        # generating permissionsMap from userPermissions
         for username in userPermissions:
             # check read permission r+w tuple, True/False?
             read, write = userPermissions[username]
@@ -150,7 +150,7 @@ class VulcanClient:
         # use previous encryptedFilename
         if encryptedFilename == None:
             if not self.db.sharedFileExists(filename):
-                print ("No record of encrypted filename being shared!")
+                print "No record of encrypted filename being shared!"
                 return
 
             encryptedFilename = self.db.getSharedEncryptedFilename(filename)
@@ -192,8 +192,8 @@ class VulcanClient:
 
         if not self.validSignature(metadata.fileWritePublicKey, fileContents, signFile):
             print "Invalid signature! File contents may have been tampered."
-
-        print "Valid signature. File contents appear to be untampered."
+        else:
+            print "Valid signature. File contents appear to be untampered."
 
         sharedFile = ClientFile.ClientFile(filename, fileContents, metadata)   
 
@@ -251,7 +251,7 @@ class VulcanClient:
         except: 
             print "ERROR: unable to retrieve file data."
             return
-            
+
         initVector = encryptedFileContents[:self.initVectorSize]
         encryptedFileContents = encryptedFileContents[self.initVectorSize:]
         cipher = AES.new(fileEncryptionKey, AES.MODE_CFB, initVector)

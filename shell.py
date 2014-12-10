@@ -10,7 +10,7 @@ class Shell(cmd.Cmd):
         self.loggedIn = False
         self.username = None
         cmd.Cmd.__init__(self)
-        cmd.Cmd.prompt = '$ '
+        cmd.Cmd.prompt = '~$ '
         self.clientObj = None
     
     """ PUBLIC API """
@@ -230,7 +230,7 @@ class Shell(cmd.Cmd):
         if clientFile is None:
             print "Unable to retrieve file data."
             return
-            
+
         self.writeFileToDisk(clientFile)        
         
     def do_rename_file(self, oldFileName, newFileName):
