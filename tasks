@@ -1,14 +1,14 @@
 # TASKS
 
-1) complete db support
-2) complete other persistence support
-- get local persistent server support
-3) implement file owner RSA key signing/verification of metadata
-4) implement a basic SHELL
-5) implement client-server connectivity
-6) somehow get a working remote server
-7) file updates
-8) implement directory support
+-1) any way to encrypt metadata?
+0) write up
+1) file rename
+2) implement file owner RSA key signing/verification of metadata and file itself
+3) Public key setup
+4) Move and create file through shell
+5) support directories
+6) implement client-server connectivity
+7) somehow get a working remote server
 
 
 ### SHELL BASIC FUNCTIONALITY DEMO ###
