@@ -147,11 +147,12 @@ class Shell(cmd.Cmd):
         fileContents = self.extractFileContents(path)
 
         # BUG - if user doesn't own the file, just pass along an Empty permissions map
-        
+
         # Get the permissions for sharing the file
         # should try to change, not redo
+        owner = self.clientObj.isOwner(f)
         permissionsMap = {}
-        while (True): 
+        while (owner): 
             s = raw_input("Enter userToShareWith,permission. Type DONE when you are finished.\n-->  ")
             if s == 'DONE':
                 break
