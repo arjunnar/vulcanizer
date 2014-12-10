@@ -196,11 +196,8 @@ class Shell(cmd.Cmd):
             print 'Error: Must specify a file to get from the server'
             return
 
-        # f might be eName or regular name?
-        #shared = True
-        #if (shared):
-            #self.clientObj.getSharedFile(f)
-        #clientFile = self.clientObj.getFile(f)
+        # clientFile = self.clientObj.downloadFile(f)
+
         if self.clientObj.isOwner(f):
             clientFile = self.clientObj.getFile(f)
 

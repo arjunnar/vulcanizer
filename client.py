@@ -155,9 +155,6 @@ class VulcanClient:
 
             encryptedFilename = self.db.getSharedEncryptedFilename(filename)
 
-        else:
-            self.db.updateSharedEncryptedFilename(filename, encryptedFilename)
-
         # call to server to get file contents
         pickledTuple = self.filestore.getFile(encryptedFilename).encryptedContents
         unpickledTuple = pickle.loads(pickledTuple)
@@ -174,7 +171,7 @@ class VulcanClient:
             print "You don't have permission to edit this file."
         else:
             print "You have edit access to this file."
-        
+      
         self.db.updateSharedFileRecord(filename, encryptedFilename, readKey, writeKey)
 
         # unencrypt file contents
