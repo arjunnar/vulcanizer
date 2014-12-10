@@ -9,3 +9,28 @@
 6) somehow get a working remote server
 7) file updates
 8) implement directory support
+
+
+### SHELL BASIC FUNCTIONALITY DEMO ###
+1) register user, createa file, upload the file, delete local copy, download the file again.
+- show that file is encrypted on the server
+2) register a user, create a file, upload the file, delete it from remote EFS, and try downloading it.
+- file should not exist
+3) register a user, create a file, upload the file, update the file, delete local copy, and re-download the file.
+- check that update was applied
+4) register user1 and user2, user1 creates a file, user1 uploads a file that is read-shared with user2. User2 should download the file and check that he can read it.
+5) register user1 and user2, user1 creates a file, user1 uploads a file that is read-shared with user2. User2 should download the file, and try to write/update it.
+- he should get rejected.
+6) ls to show all files in remote 
+7) register user1 and user2, user1 creates a file, user1 uploads a file that is write-shared with user2. User2 should download the file, edit it, and upload it back to the remote EFS. User1 should then download it again and see the changes.
+8) register a user, create a file, upload the file. Then rename the file and update it on the remote EFS.
+
+### SHELL SECURITY FUNCTIONALITY ###
+1) register a user, create a file, upload the file, and then have the server tamper with it. Download the file.
+- we should detect tampering.
+2) register a user, create a file, upload the file, and try to download it. Have the server return another file's contents.- we should detect tampering.
+3) register a user, create a file, and upload the file. The server should delete the file, and we should try to download it.
+- we should detect that the file has been deleted.
+4) reguster user1 and user2, user1 creates a file, user1 uploads the file that is then write-shared with user2. User2 should try to rename the file.
+- user2 should be rejected from renaming the file.
+
