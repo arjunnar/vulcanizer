@@ -251,12 +251,21 @@ class Shell(cmd.Cmd):
 
         self.writeFileToDisk(clientFile)        
         
-    def do_rename_file(self, oldFileName, newFileName):
-        if oldFileName == '' or newFileName == '':
+    def do_rename_file(self, line):
+        self.checkLogin()
+
+        oldFilename, newFilename = line.split()
+
+        if oldFilename == '' or newFilename == '':
             print 'Error: Usage is rename_file oldname.file newname.file'
             return
-
+        
         # Call client's rename code
+        if not self.clientObj.renameFile(oldFilename, newFilename):
+            print 'Error renaming file.'
+            return
+
+        print 'Error renaming file.'
 
     def do_get_eName(self, f):
         eName = self.clientObj.getEncryptedFilename(f)
@@ -266,6 +275,11 @@ class Shell(cmd.Cmd):
             print eName
 
     """ HELPER METHODS """
+    def checkLogin(self):
+        if not self.loggedIn:
+            print 'Must login or register'
+            return
+
     def extractFileContents(self, path):
         f = open(path, 'r')
         unencryptedContents = f.read()

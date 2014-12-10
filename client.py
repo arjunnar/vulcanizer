@@ -355,30 +355,58 @@ class VulcanClient:
     def fileExists(self, filename):
         return self.db.fileExists(filename)
 
+    '''
+    show all files (owned and shared) in your EFS directory
+    '''
     def showAllFiles(self):
         return self.db.showAllFiles()
 
     def renameFile(self, filename, newFilename):
         if self.isOwner(filename):
-            '''
+            # able to rename.
+            # make a new file with the same contents, signFile, and metadata
+            # delete old file, upload new file?
             encryptedFilename = self.db.getEncryptedFilename(filename)
-            pickledTuple = self.filestore.getFile(encryptedFilename).encryptedContents
-            unpickledTuple = pickle.loads(pickledTuple)
-            prevEncryptedFileContents, prevSignFile, prevPickledMetadata = unpickledTuple
-            prevMetadata = pickle.loads(prevPickledMetadata)
-            userPermissions = self.getMetadataPermissions(prevMetadata)
-            newCF = ClientFile.clientFile(newFilename, )
+            try:
+                oldCF = self.getFile(filename)
+            except Exception:
+                print "Error: problem with file to update."
+                return False
+            
+            if oldCF == None:
+                print "Error: file no longer exists."
+                return False
+
+            # get previous file contents
+            prevFileContents = oldCF.contents
+            # create new file with new name and old contents
+            newCF = ClientFile.ClientFile(newFilename, prevFileContents)
+            # can't use old file metadata.
+            prevMetadata = oldCF.metadata
+            # use old userPermissions
+            userPermissions = self.getUserPermissions(prevMetadata)
+            # delete old file
             self.deleteFile(filename)
+            # just re-add new file
             self.addFile(newCF, userPermissions)
-            '''
             return True
 
         else:
             print "File does not exist, or you do not have permission to rename file."
             return False
 
-    def getMetadataPermissions(self, metadata):
-        return {}
+    def getUserPermissions(self, metadata):
+        permissionsMap = metadata.permissionsMap
+        userPermissions = {}
+        for username in permissionsMap:
+            read, write = permissionsMap[username]
+            if write:
+                userPermissions[username] = (True, True)
+            elif read:
+                userPermissions[username] = (True, False)
+            else:
+                continue
+        return userPermissions
 
     def deleteFile(self, filename):
         # call to server to delete for encryptedFileName
