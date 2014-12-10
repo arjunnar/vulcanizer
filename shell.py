@@ -48,6 +48,9 @@ class Shell(cmd.Cmd):
         return
 
     def do_login(self, username):
+        if username == '':
+            print 'Cannot have an empty username'
+        
         if self.username == username:
             print 'That user is already logged in'
             return
