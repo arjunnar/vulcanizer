@@ -3,9 +3,6 @@
 -1) implement file owner RSA key signing/verification of metadata and file itself
 0)  
 1) write up
-2) integrate Dropbox
-3) Public key setup
-4) ls your through shell
 5) any way to encrypt metadata?
 6) support directories
 
