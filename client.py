@@ -437,7 +437,11 @@ class VulcanClient:
         if self.isOwner(filename):
             encryptedFilename = self.getEncryptedFilename(filename)
             self.db.deleteFileRecord(filename)
-            self.filestore.deleteFile(encryptedFilename)
+            try:
+                self.filestore.deleteFile(encryptedFilename)
+            except:
+                print "Deleting file was unsuccessful."
+                return False
             return True
         else:
             print "File does not exist, or permission to delete file denied."

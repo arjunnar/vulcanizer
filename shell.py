@@ -54,6 +54,12 @@ class Shell(cmd.Cmd):
             print 'Error: Must specify a file to delete'
             return
 
+        filename = self.userDirectory + f
+        try:
+            os.remove(filename)
+        except:
+            print "No local file to remove, removing remote file..."
+            
         # Call client's delete file code
         if self.clientObj.deleteFile(f):
             print "Delete was successful."
