@@ -17,7 +17,7 @@ class Shell(cmd.Cmd):
     
     """ PUBLIC API """
     # opens a new notepad with given filename
-    def do_open(self, filename):
+    def do_create_file(self, filename):
         if not self.checkLogin():
             return
         userDir = os.getcwd() + "\\client\\" + self.username + "\\"
@@ -35,7 +35,7 @@ class Shell(cmd.Cmd):
         for username in self.clientObj.allUsers():
             print username
 
-    def do_edit(self, filename):
+    def do_edit_file(self, filename):
         if not self.checkLogin():
             return
         self.do_open(filename)
@@ -71,13 +71,18 @@ class Shell(cmd.Cmd):
             return
 
         #clientFile = self.clientObj.downloadFile(f)
+        args = f.split()
+        f = args[0]
+        hashed = None
+        if len(args) == 2:
+            hashed = args[1]
 
         if self.clientObj.isOwner(f):
             clientFile = self.clientObj.getFile(f)
 
         elif self.clientObj.isSharedFile(f):
             try:
-                clientFile = self.clientObj.getSharedFile(f)
+                clientFile = self.clientObj.getSharedFile(f, hashed)
             except Exception:
                 print"Permission denied"
                 return
@@ -92,7 +97,7 @@ class Shell(cmd.Cmd):
             
             except:
                 print "Permission denied"
-                return
+                return  
 
             if clientFile is None:
                 print "file not shared."
