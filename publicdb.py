@@ -1,25 +1,27 @@
 import sqlite3
 import os
+import DropboxClient
+from dropbox import rest as dbrest
 
 clientDirectoryLoc = 'client/'
 publicDirectoryLoc = clientDirectoryLoc + 'public/'
 dbDirectoryName = 'db/'
+publicDbName = 'publicDb.db'
+remotePublicDbName = 'public/' + publicDbName
 
 "Wrapper for public db used by all clients"
 
 class PublicDb():
     def __init__(self):
+        self.dropboxClient = DropboxClient.DropboxClient()
         if not os.path.exists(clientDirectoryLoc):
             os.mkdir(clientDirectoryLoc)
         
         if not os.path.exists(publicDirectoryLoc):
             os.mkdir(publicDirectoryLoc)
-
         self.dbDirectoryLoc = publicDirectoryLoc + dbDirectoryName
-        
         if not os.path.exists(self.dbDirectoryLoc):
             os.mkdir(self.dbDirectoryLoc)
-
         self.publicDirectoryLoc = self.dbDirectoryLoc + 'publicDb.db'
 
         # Create public data db
@@ -31,11 +33,18 @@ class PublicDb():
             self.dbCursor.execute('''CREATE TABLE publicKeysTable
                                          (username text PRIMARY KEY, publicKey text)''')
             self.dbConn.commit()
+            f = open(self.publicDirectoryLoc, 'r')
+            self.dropboxClient.upload(remotePublicDbName, f)
+            f.close()
+
+        else:
+            self.dropboxClient.replace(self.publicDirectoryLoc, remotePublicDbName)
 
         self.dbConn = None
         self.dbCursor = None
 
     def connectToPublicDb(self):
+        self.dropboxClient.replace(self.publicDirectoryLoc, remotePublicDbName)
     	self.connectToDb(self.publicDirectoryLoc)
 
     def connectToDb(self, loc):
@@ -48,6 +57,7 @@ class PublicDb():
         values = (username, publicKey)
         self.dbConn.execute("INSERT INTO publicKeysTable VALUES (?,?)", values)
         self.dbConn.commit()
+        self.updateRemote()
 
     def getPublicKey(self, username):
     	self.connectToPublicDb()
@@ -70,3 +80,7 @@ class PublicDb():
     		userPublicKeysMap[username] = publicKey
     	return userPublicKeysMap
 
+    def updateRemote(self):
+        f = open(self.publicDirectoryLoc, 'r')
+        self.dropboxClient.upload(remotePublicDbName, f)
+        f.close()

@@ -15,10 +15,19 @@ class DropboxClient():
     def upload(self, filename, contents):
         response = self.client.put_file(filename, contents, overwrite=True)
 
-    def download(self, filename):
+    def download(self, filename, read=True):
         f, metadata = self.client.get_file_and_metadata(filename)
-        contents = f.read()
+        if read:
+            contents = f.read()
+        else:
+            contents = f
         return filename, contents
+
+    def replace(self, localName, remoteName):
+        out = open(localName, 'wb')
+        f, metadata = self.client.get_file_and_metadata(remoteName)
+        out.write(f.read())
+        out.close()
 
     def delete(self, filename):
         self.client.file_delete(filename)
