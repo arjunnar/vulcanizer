@@ -132,7 +132,8 @@ class VulcanClient:
 
     def generatePermissionsMap(self, fileEncryptionKey, fileWriteEncryptionKey, fileWriteEncryptionIV, userPermissions):
         permissionsMap = {}
-
+        # refresh public keys
+        self.userPublicKeys = self.publicdb.getPublicKeysMap()
         # generating permissionsMap from userPermissions
         for username in userPermissions:
             if username not in self.userPublicKeys:

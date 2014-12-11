@@ -16,7 +16,6 @@ class DropboxClient():
         print filename
         response = self.client.put_file(filename, contents, overwrite=True)
 
-
     def download(self, filename, read=True):
         f, metadata = self.client.get_file_and_metadata(filename)
         if read:
