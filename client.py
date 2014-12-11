@@ -7,11 +7,10 @@ from Crypto import Random
 from Crypto.Hash import SHA256
 import ClientFile
 import pickle
-import globalScope
-from globalScope import MockServer, userPublicKeys
 import sqlite3
 import os
 import clientdb
+import publicdb
 import clientCrypto
 from filestore import Filestore, EncryptedFile
 
@@ -29,6 +28,14 @@ class VulcanClient:
         self.junkDataSize = 16
 
         self.filestore = Filestore()
+        self.publicdb = publicdb.PublicDb()
+        self.userPublicKeys = None
+
+    '''
+    Code to enable dropbox support.
+    '''
+    def setupDropbox(self):
+        pass
 
     '''
     returns boolean indicatign successful registration
@@ -49,12 +56,15 @@ class VulcanClient:
         self.username = username
         self.rsaPublicKey, self.rsaPrivateKey = clientCrypto.newRSAKeyPair(self.rsaKeyBits)
         self.db.addUserDbRecord(self.username, self.rsaPublicKey, self.rsaPrivateKey)
+        self.publicdb.addPublicKey(self.username, self.rsaPublicKey)
+        self.userPublicKeys = self.publicdb.getPublicKeysMap()
         return True
 
     def login(self, username):
         self.db = clientdb.ClientDb(username)
         self.db.setupAllDbs()
         self.username, self.rsaPublicKey, self.rsaPrivateKey = self.db.getUserDbRecord(username)
+        self.userPublicKeys = self.publicdb.getPublicKeysMap()
 
     '''
     method to generate junkData
@@ -121,7 +131,7 @@ class VulcanClient:
 
         # generating permissionsMap from userPermissions
         for username in userPermissions:
-            if username not in userPublicKeys:
+            if username not in self.userPublicKeys:
                 raise Exception("The user you want to share with has not shared his public key.")
 
             # check read permission r+w tuple, True/False?
@@ -130,7 +140,7 @@ class VulcanClient:
             writeKey = None
             if read:
                 # RSA encode with public key
-                userPublicKey = userPublicKeys[username]
+                userPublicKey = self.userPublicKeys[username]
                 readKey = self.encryptReadKey(userPublicKey, fileEncryptionKey)
             
             if write:
@@ -431,7 +441,3 @@ class VulcanClient:
             return self.db.getEncryptedFilename(filename)
         except Exception:
             return None
-
-    def publishPublicKey(self):
-        if self.username != None:
-            globalScope.userPublicKeys[self.username] = self.rsaPublicKey

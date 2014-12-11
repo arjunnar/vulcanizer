@@ -184,14 +184,6 @@ class Shell(cmd.Cmd):
             return
 
         print 'Successfully renamed file.'
-    
-    def do_share_key(self, line):
-        if not self.loggedIn:
-            print 'Must login or register'
-            return
-        self.clientObj.publishPublicKey()
-        print "shared key"
-        return
    
     def do_status(self, line):
         if self.username:
