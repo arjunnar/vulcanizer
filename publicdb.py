@@ -80,6 +80,9 @@ class PublicDb():
     		userPublicKeysMap[username] = publicKey
     	return userPublicKeysMap
 
+    def usersList(self):
+        return self.getPublicKeysMap().keys()
+
     def updateRemote(self):
         f = open(self.publicDirectoryLoc, 'r')
         self.dropboxClient.upload(remotePublicDbName, f)

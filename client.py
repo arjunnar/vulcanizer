@@ -41,6 +41,10 @@ class VulcanClient:
     returns boolean indicatign successful registration
     '''
     def register(self, username):
+        if username in self.publicdb.usersList():
+            print "Username already taken!"
+            return False
+
         if self.username != None:
             print "Already registered user!"
             return False
@@ -371,6 +375,9 @@ class VulcanClient:
 
     def fileExists(self, filename):
         return self.db.fileExists(filename)
+
+    def allUsers(self):
+        return self.publicdb.usersList()
 
     '''
     show all files (owned and shared) in your EFS directory

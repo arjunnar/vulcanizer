@@ -29,6 +29,12 @@ class Shell(cmd.Cmd):
             print "Error opening file."
         return
 
+    def do_list_users(self, line):
+        if not self.checkLogin():
+            return
+        for username in self.clientObj.allUsers():
+            print username
+
     def do_edit(self, filename):
         if not self.checkLogin():
             return

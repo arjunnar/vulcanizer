@@ -13,7 +13,9 @@ class DropboxClient():
         self.client = dropbox.client.DropboxClient(access_token)
 
     def upload(self, filename, contents):
+        print filename
         response = self.client.put_file(filename, contents, overwrite=True)
+
 
     def download(self, filename, read=True):
         f, metadata = self.client.get_file_and_metadata(filename)
@@ -31,6 +33,3 @@ class DropboxClient():
 
     def delete(self, filename):
         self.client.file_delete(filename)
-
-    def rename(self, oldFilename, newFilename):
-        pass
