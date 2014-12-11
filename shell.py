@@ -38,7 +38,7 @@ class Shell(cmd.Cmd):
     def do_edit_file(self, filename):
         if not self.checkLogin():
             return
-        self.do_open(filename)
+        self.do_create_file(filename)
 
     def do_greet(self, line):
         print "Welcome to our Encrypted File System"
