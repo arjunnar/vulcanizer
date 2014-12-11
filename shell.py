@@ -110,14 +110,11 @@ class Shell(cmd.Cmd):
             self.copyToClipboard(eName)
             print eName
 
-    def do_local(self, line):
+    def do_list_files(self, line):
         if not self.checkLogin():
             return
-
-        userDir = os.getcwd() + '\\client\\' + self.username
-        for filename in os.listdir(self.userDirectory):
-            if filename != 'db':
-                print filename
+        for f in self.clientObj.showAllFiles():
+            print f
         return
 
     def do_login(self, username):
@@ -147,12 +144,15 @@ class Shell(cmd.Cmd):
         self.loggedIn = False
         print 'Successfully logged out.'
         return
-
+    
     def do_ls(self, line):
         if not self.checkLogin():
             return
-        for f in self.clientObj.showAllFiles():
-            print f
+
+        userDir = os.getcwd() + '\\client\\' + self.username
+        for filename in os.listdir(self.userDirectory):
+            if filename != 'db':
+                print filename
         return
 
     def do_register(self, username):
@@ -185,6 +185,11 @@ class Shell(cmd.Cmd):
 
         print 'Successfully renamed file.'
    
+    def do_rm(self, f):
+        filename = self.userDirectory + f
+        os.remove(filename)
+        return
+
     def do_status(self, line):
         if self.username:
             print "user: " + self.username
