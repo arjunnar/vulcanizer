@@ -45,6 +45,7 @@ class Shell(cmd.Cmd):
 
     def do_EOF(self, line):
         return True
+
     def do_delete_file(self, f):
         if not self.loggedIn:
             print 'Must login or register'
@@ -60,12 +61,15 @@ class Shell(cmd.Cmd):
         except:
             print "No local file to remove, removing remote file..."
             
-        # Call client's delete file code
-        if self.clientObj.deleteFile(f):
-            print "Delete was successful."
-            return
-        else:
-            print "Delete was unsuccessful."
+        try:
+            # Call client's delete file code
+            if self.clientObj.deleteFile(f):
+                print "Delete was successful."
+                return
+            else:
+                print "Delete was unsuccessful."
+        except:
+            "Delete was unsuccessful."
     
     def do_download_file(self, f):
         if not self.loggedIn:
@@ -84,7 +88,11 @@ class Shell(cmd.Cmd):
             hashed = args[1]
 
         if self.clientObj.isOwner(f):
-            clientFile = self.clientObj.getFile(f)
+            try:
+                clientFile = self.clientObj.getFile(f)
+            except:
+                print "download not successful."
+                return
 
         elif self.clientObj.isSharedFile(f):
             try:
@@ -187,6 +195,11 @@ class Shell(cmd.Cmd):
 
     def do_rename_file(self, line):
         if not self.checkLogin():
+            return
+
+        args = line.split()
+        if len(args != 2):
+            print "Incorrect number of arguments."
             return
 
         oldFilename, newFilename = line.split()
