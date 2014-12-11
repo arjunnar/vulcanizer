@@ -24,18 +24,20 @@ class PublicDb():
             os.mkdir(self.dbDirectoryLoc)
         self.publicDirectoryLoc = self.dbDirectoryLoc + 'publicDb.db'
 
-        # Create public data db
-        if not os.path.exists(self.publicDirectoryLoc):
-            self.dbConn = sqlite3.connect(self.publicDirectoryLoc)
-            self.dbCursor = self.dbConn.cursor()
+        # check if table exists remotely 
+        if not self.remoteExists():
 
-            # Create single table within public data db
-            self.dbCursor.execute('''CREATE TABLE publicKeysTable
-                                         (username text PRIMARY KEY, publicKey text)''')
-            self.dbConn.commit()
-            f = open(self.publicDirectoryLoc, 'r')
-            self.dropboxClient.upload(remotePublicDbName, f)
-            f.close()
+            # Create public data db
+            if not os.path.exists(self.publicDirectoryLoc):
+                self.dbConn = sqlite3.connect(self.publicDirectoryLoc)
+                self.dbCursor = self.dbConn.cursor()
+
+                # Create single table within public data db
+                self.dbCursor.execute('''CREATE TABLE publicKeysTable
+                                             (username text PRIMARY KEY, publicKey text)''')
+                self.dbConn.commit()
+
+            self.updateRemote()
 
         else:
             self.dropboxClient.replace(self.publicDirectoryLoc, remotePublicDbName)
@@ -87,3 +89,11 @@ class PublicDb():
         f = open(self.publicDirectoryLoc, 'r')
         self.dropboxClient.upload(remotePublicDbName, f)
         f.close()
+
+    def remoteExists(self):
+        try:
+            self.dropboxClient.download(remotePublicDbName, False)
+            return True
+        except dbrest.ErrorResponse:
+            print "remote public db doesn't exist"
+            return False
