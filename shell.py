@@ -110,6 +110,16 @@ class Shell(cmd.Cmd):
             self.copyToClipboard(eName)
             print eName
 
+    def do_local(self, line):
+        if not self.checkLogin():
+            return
+
+        userDir = os.getcwd() + '\\client\\' + self.username
+        for filename in os.listdir(self.userDirectory):
+            if filename != 'db':
+                print filename
+        return
+
     def do_login(self, username):
         if username == '':
             print 'Cannot have an empty username'
@@ -139,10 +149,8 @@ class Shell(cmd.Cmd):
         return
 
     def do_ls(self, line):
-        if not self.loggedIn:
-            print 'Must login or register'
+        if not self.checkLogin():
             return
-
         for f in self.clientObj.showAllFiles():
             print f
         return
